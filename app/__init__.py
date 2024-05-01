@@ -17,8 +17,7 @@ jwt = JWTManager()
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, clean_session=True)
 mqtt_client.username_pw_set(Config.MQTT_USERNAME, Config.MQTT_PASSWD)
 
-def create_app(config_name):
-    
+def create_app(config_name):   
     app = Flask(__name__,)
     CORS(app)
     app.config.from_object(config[config_name])

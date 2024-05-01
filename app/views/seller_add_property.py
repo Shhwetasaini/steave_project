@@ -21,7 +21,8 @@ from app.services.properties import (
     generate_unique_name,
     get_client_ip,
     send_email,
-    is_valid
+    is_valid,
+    validate_address
 )
 
 logger = logging.getLogger(__name__)
@@ -29,34 +30,7 @@ logger = logging.getLogger(__name__)
 STRIPE_SECRET_KEY = 'sk_test_51ObRVYDBozxLjRB4vlgKvA7OOJAp6WYTlOqjQJ2e1AmngXP5aiQBvVZzehDAntHcVJsj6tUi2k4kuQRWwIHcDFCd003B5WogrF'
 stripe.api_key = STRIPE_SECRET_KEY
 
-class ValidateAddressView(MethodView):
-    decorators = [custom_jwt_required()]
-    def get(self):
-        seller_address = request.args.get('seller_address', '')
-        if not seller_address:
-            return jsonify({'error':'seller_address is missing.'})
 
-        # Use Google Maps Geocoding API to validate the entered address
-        geocoder = GoogleV3(api_key='AIzaSyCPFDGMxu0OwtR6skUVt2e_pIY6TOFF42E')
-
-        try:
-            location = geocoder.geocode(seller_address)
-
-            if location:
-                address_components = location.raw['address_components']
-
-                # Check if the address contains necessary components (e.g., country, state, postal code)
-                has_country = any('country' in component['types'] for component in address_components)
-                has_state = any('administrative_area_level_1' in component['types'] for component in address_components)
-                has_postal_code = any('postal_code' in component['types'] for component in address_components)
-
-                if has_country and has_state and has_postal_code:
-                    return jsonify({'valid': True})
-
-        except Exception as e:
-            pass
-
-        return jsonify({'valid': False})
 
 
 class PropertyTypeSelectionView(MethodView):
@@ -78,13 +52,18 @@ class PropertyTypeSelectionView(MethodView):
         # Check if seller_property_address is present in e_sign_data and contains mn, minnesota, fl, or florida
         if not any(keyword in  property_address.lower() for keyword in ['mn', 'minnesota', 'fl', 'florida']):
             return jsonify({'error': "The address must be located in Minnesota (MN) or Florida (FL)."})
-    
+        
+        valid_address = validate_address(property_address)
+        if not valid_address:
+            return jsonify({'error': "Invalid Address. missing country, state or postal_code"})
+
         session['e_sign_data'] = {
             'property_type': property_type,
             'property_address': property_address,
         }
 
         return jsonify({'message':'data saved in session successfully.', 'data': session['e_sign_data']})
+
 
 
 class InfosView(MethodView):

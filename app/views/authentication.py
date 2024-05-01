@@ -37,14 +37,14 @@ class RegisterUserView(MethodView):
         gmail = data.get('gmail', None)
         linkedin = data.get('linkedin', None)
         password = data.get('password', None)
-        role = data.get('role')
+        role = data.get('role', None)
         if not role:
-            role='seller'          #['seller' or 'buyer' or 'realtor'] , default - seller
+            role=None
         
-        if not uuid_val or not password or not email or not phone:
-            return jsonify({"error": "email or password or phone is missing!"}), 200
+        if not all([uuid_val, password, email, phone]):
+            return jsonify({"error": "uuid, password, email, or phone is missing!"}), 200
         
-        if role not in ['seller', 'buyer', 'realtor']:
+        if role and role not in ['realtor']:
             return jsonify({"error": "Invalid user role!"}), 200
         
         # Validate email using email_validator
@@ -76,6 +76,7 @@ class RegisterUserView(MethodView):
             'facebook': facebook,
             'gmail': gmail,
             'linkedin': linkedin,
+            'profile_pic': None,
             'password': hashlib.sha256(password.encode("utf-8")).hexdigest(),
             'is_verified': False
         }

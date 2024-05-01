@@ -107,46 +107,96 @@ from app.views.notifications import store_notification
 #        )
 #        return jsonify({'message': 'properties added to the seller successfully'}), 200
 #
-#
-#class SellersPropertyAddView(MethodView):
-#    decorators = [custom_jwt_required()]
-#
-#    def post(self):
-#        log_request(request)
-#        current_user = get_jwt_identity()
-#
-#        try:
-#            validate_email(current_user)
-#            user = current_app.db.users.find_one({'email': current_user})
-#        except EmailNotValidError:
-#            user = current_app.db.users.find_one({'uuid': current_user})
-#
-#        data = request.json
-#        property_ids = data.get('property_ids')
-#        
-#        if not user:
-#            return jsonify({'error': 'User not found'}), 200
-#        
-#        user_role = user.get('role')
-#        if user_role != 'seller':
-#            return jsonify({'error': 'Unauthorized access'}), 200
-#        
-#        for property_id in property_ids:
-#            property_id = ObjectId(property_id)
-#
-#            # Check if the property is already assigned to a seller
-#            existing_property = current_app.db.properties.find_one({'_id': property_id, 'seller_id': {'$exists': True}})
-#            if existing_property:
-#                continue
-#            
-#            # Update property document to add the seller's ID
-#            current_app.db.properties.update_one(
-#                {'_id': property_id},
-#                {'$set': {'seller_id': user['uuid']}}
-#            )
-#        
-#        return jsonify({'message': 'Seller added to properties successfully'}), 200
-#
+
+class PropertyAddView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def post(self):
+        log_request(request)
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Extract property data from request
+        property_data = request.form.to_dict()
+
+        # Check if all required fields are present and not empty
+        required_fields = [
+            'name', 'status', 'address', 'state', 'city', 
+            'latitude', 'longitude', 'beds', 'baths', 'kitchen',
+            'property_type', 'description', 'price', 'size'
+        ]
+        missing_or_empty_fields = [field for field in required_fields if field not in property_data or not property_data[field].strip()]
+        if missing_or_empty_fields:
+            return jsonify({'error': f'Missing or empty required fields: {", ".join(missing_or_empty_fields)}'}), 200
+        
+        # Check if images are present
+        if 'images' not in request.files or not request.files.getlist("images"):
+            return jsonify({'error': 'No images provided'}), 200
+
+        # Extract images from request
+        images = request.files.getlist("images")
+
+        # Save images to file system or cloud storage and get their URLs
+        image_urls = []
+        for image in images:
+
+            # Save image and get URL
+            org_filename = secure_filename(image.filename)
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            filename = f"{timestamp}_{org_filename}"
+            user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id))
+            os.makedirs(user_media_dir, exist_ok=True)
+
+            image_path = os.path.join(user_media_dir, filename)
+            image.save(image_path)
+
+            # Generate URL for accessing the saved image
+            image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), filename))
+            image_urls.append(image_url)
+
+        # Create property document
+        property_doc = {
+            "name": property_data.get("name", ""),
+            "status": property_data.get("status", ""),
+            "address": property_data.get("address", ""),
+            "state": property_data.get("state", ""),
+            "city": property_data.get("city", ""),
+            "latitude": property_data.get("latitude", 0.0),
+            "longitude": property_data.get("longitude", 0.0),
+            "beds": property_data.get("beds", 0),
+            "baths": property_data.get("baths", 0),
+            "kitchen": property_data.get("kitchen", 0),
+            "property_type": property_data.get("property_type",""),
+            "description": property_data.get("description", ""),
+            "price": property_data.get("price", 0),
+            "size": property_data.get("size", 0),
+            "images": image_urls
+        }
+
+        # Insert property document into database
+        inserted_property = current_app.db.properties.insert_one(property_doc)
+        property_id = str(inserted_property.inserted_id)
+
+        # Create lookup table entry for property, seller IDs, and list of realtors
+        lookup_data = {
+            "property_id": str(property_id),
+            "seller_id": [user["uuid"]],
+            "realtors": []  
+        }
+
+        # Insert lookup data into the lookup table
+        current_app.db.property_seller_lookup.insert_one(lookup_data)
+
+        return jsonify({"message": "Property added successfully"}), 200
+
 
 class SellerPropertyListView(MethodView):
     decorators = [custom_jwt_required()]
@@ -165,20 +215,97 @@ class SellerPropertyListView(MethodView):
             return jsonify({'error': 'User not found'}), 200
         
         user_role = user.get('role')
-        if user_role != 'seller':
+        if user_role != 'realtor' and not current_app.db.property_seller_lookup.find_one({"seller_id": [user['uuid']]}):
             return jsonify({'error': 'Unauthorized access'}), 200
-        
-        # Retrieve properties listed by the seller
-        properties = current_app.db.properties.find({'seller_id': user['uuid']})
-        
-        # Prepare response with property details
+
+        # Get properties associated with the seller
+        properties = current_app.db.properties.find({"_id": {"$in": current_app.db.property_seller_lookup.find_one({"seller_id": [user['uuid']]})['property_id']}})
+
+        # Construct response
         property_list = []
-        for property in properties:
-            property['property_id'] = str(property['_id'])
-            property.pop('_id', None)
-            property_list.append(property)
-        
+        for prop in properties:
+            prop["_id"] = str(prop["_id"])
+            property_list.append(prop)
+
         return jsonify(property_list), 200
+    
+
+class PropertyListView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def get(self):
+        log_request(request)
+        properties = current_app.db.properties.find()
+
+        property_list = []
+        for prop in properties:
+            lookup_info = current_app.db.property_seller_lookup.find_one({"property_id": prop['_id']})
+            seller_ids = lookup_info.get("seller_id", [])
+            seller_info_list = []
+            for seller_id in seller_ids:
+                seller_info = current_app.db.users.find_one({'uuid': seller_id})
+                if seller_info:
+                    seller_info_list.append({
+                        "name": seller_info.get("name"),
+                        "email": seller_info.get("email"),
+                        "phone": seller_info.get("phone"),
+                        # Add any other seller information you want to include
+                    })
+
+            property_list.append({
+                "_id": str(prop['_id']),
+                "name": prop.get("name"),
+                "status": prop.get("status"),
+                "address": prop.get("address"),
+                "city": prop.get("city"),
+                "state": prop.get("state"),
+                "latitude": prop.get("latitude"),
+                "longitude": prop.get("longitude"),
+                "beds": prop.get("beds"),
+                "baths": prop.get("baths"),
+                "kitchen": prop.get("kitchen"),
+                "property_type": prop.get("property_type"),
+                "description": prop.get("description"),
+                "price": prop.get("price"),
+                "size": prop.get("size"),
+                "images": prop.get("images"),
+                "seller_info": seller_info_list
+            })
+
+        return jsonify(property_list), 200
+
+
+#class SellerPropertyListView(MethodView):
+#    decorators = [custom_jwt_required()]
+#
+#    def get(self):
+#        log_request(request)
+#        current_user = get_jwt_identity()
+#
+#        try:
+#            validate_email(current_user)
+#            user = current_app.db.users.find_one({'email': current_user})
+#        except EmailNotValidError:
+#            user = current_app.db.users.find_one({'uuid': current_user})
+#        
+#        if not user:
+#            return jsonify({'error': 'User not found'}), 200
+#        
+#        user_role = user.get('role')
+#        if user_role != 'realtor':
+#            return jsonify({'error': 'Unauthorized access'}), 200
+#        
+#        # Retrieve properties listed by the seller
+#        properties = current_app.db.properties.find({'seller_id': user['uuid']})
+#        
+#        # Prepare response with property details
+#        property_list = []
+#        for property in properties:
+#            property['property_id'] = str(property['_id'])
+#            property.pop('_id', None)
+#            property_list.append(property)
+#        
+#        return jsonify(property_list), 200
 
 
 class SellerBuyersListView(MethodView):
@@ -335,13 +462,7 @@ class PropertyImageAddView(MethodView):
             image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), org_filename))
     
             # Update property_data with image information
-            image_info = {
-              'name': org_filename,
-              'url': image_url,
-              'added_at': datetime.now()
-            }
-
-            property_data['images'].append(image_info)
+            property_data['images'].append(image_url)
 
             # Update the user's properties in the database
             result = current_app.db.properties.update_one(

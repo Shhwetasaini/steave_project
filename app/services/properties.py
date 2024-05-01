@@ -7,6 +7,7 @@ from flask import current_app, request
 import sendgrid
 from sendgrid.helpers.mail import Mail, Email, To
 from datetime import timezone
+from geopy.geocoders import GoogleV3
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,6 @@ def create_property(property_data):
     except Exception as e:
         logger.error(f"Error creating property: {str(e)}")
         return False
-
 
 
 def send_email(subject, message, recipient):
@@ -138,3 +138,22 @@ def is_valid(coupon):
     Check if the coupon is currently valid.
     """
     return coupon['expiration_date'] >= timezone.now().date()
+
+
+def validate_address(address):
+
+    # Use Google Maps Geocoding API to validate the entered address
+    geocoder = GoogleV3(api_key='AIzaSyCPFDGMxu0OwtR6skUVt2e_pIY6TOFF42E')
+    try:
+        location = geocoder.geocode(address)
+        if location:
+            address_components = location.raw['address_components']
+            # Check if the address contains necessary components (e.g., country, state, postal code)
+            has_country = any('country' in component['types'] for component in address_components)
+            has_state = any('administrative_area_level_1' in component['types'] for component in address_components)
+            has_postal_code = any('postal_code' in component['types'] for component in address_components)
+            if has_country and has_state and has_postal_code:
+                return True
+    except Exception as e:
+        pass
+    return False

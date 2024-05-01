@@ -205,7 +205,8 @@ class DownloadDocView(MethodView):
 class UploadDocView(MethodView):
     decorators = [custom_jwt_required()]
 
-    def post(self):
+    def put(self):
+        print(request.content_type)
         log_request(request)
         current_user = get_jwt_identity()
 
@@ -214,53 +215,42 @@ class UploadDocView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-        
-        #Handle both JSON and multipart/form-data for receiving files
-        if request.content_type.startswith('multipart/form-data'):
-            file = request.files.get('file')
 
-            if not file:
-                return jsonify({'error':'file is missing!'}), 200
-            
-            if file and werkzeug.utils.secure_filename(file.filename):
-                org_filename = werkzeug.utils.secure_filename(file.filename)
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                filename = f"{timestamp}_{org_filename}"
-                user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid'], 'uploaded_docs'))
-                os.makedirs(user_media_dir, exist_ok=True)
-                user_doc_path = os.path.join(user_media_dir, filename)
-                file.save(user_doc_path)
-                doc_url = url_for('serve_media', filename=os.path.join('user_docs', str(user['uuid']), 'uploaded_docs', filename))
-            
-                document_data = {
-                    'name': file.filename,
-                    'url' : doc_url,
-                    'type': None,
-                    'uploaded_at': datetime.now()
-                }
-                    
-                # Update the uploaded_documents collection
-                current_app.db.users.update_one(
-                    {'uuid': user['uuid']},
-                    {'$push': {'uploaded_documents': document_data}}
-                )
+        file = request.files.get('file')
+        if not file:
+            return jsonify({'error': 'File is missing!'}), 400
 
-                store_notification(
-                    user_id=user['uuid'], 
-                    title="Document Upload", 
-                    message="document uploaded successfully",
-                    type="document"
-                )
-                return jsonify({"message": "File successfully uploaded!"}), 200
-            else:
-                return jsonify({"message": "Invalid filename."}), 200
+        if file and werkzeug.utils.secure_filename(file.filename):
+            org_filename = werkzeug.utils.secure_filename(file.filename)
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            filename = f"{timestamp}_{org_filename}"
+            user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid']), 'uploaded_docs')
+            os.makedirs(user_media_dir, exist_ok=True)
+            user_doc_path = os.path.join(user_media_dir, filename)
+            file.save(user_doc_path)
+            doc_url = url_for('serve_media', filename=os.path.join('user_docs', str(user['uuid']), 'uploaded_docs', filename))
 
-        elif request.is_json:
-            # Handle JSON content if needed. This block is placeholder for future expansion.
-            pass
+            document_data = {
+                'name': file.filename,
+                'url': doc_url,
+                'type': None,
+                'uploaded_at': datetime.now()
+            }
 
+            # Update the uploaded_documents collection
+            current_app.db.users.update_one(
+                {'uuid': user['uuid']},
+                {'$push': {'uploaded_documents': document_data}}
+            )
+            store_notification(
+                user_id=user['uuid'],
+                title="Document Upload",
+                message="Document uploaded successfully",
+                type="document"
+            )
+            return jsonify({"message": "File successfully uploaded!", "document_data": document_data}), 200
         else:
-            return jsonify({"error": "Unsupported Content Type"}), 200
+            return jsonify({"error": "File is missing or invalid filename."}), 400
 
 
 class AllDocsView(MethodView):
@@ -286,7 +276,7 @@ class AllDocsView(MethodView):
                             if not document_exists(doc_name):
                                 image_name = extract_first_page_as_image(os.path.join(folder_path, file))
                                 if image_name:
-                                    # Check if preview image already exists in MongoDB and folder
+                                    # Check if preview image already exists in MongoDB and fo   lder
                                     if not resource_exists(preview_page_url, doc_url):
                                         # Store data in MongoDB
                                         document_data = {
@@ -295,7 +285,8 @@ class AllDocsView(MethodView):
                                             'added_at': datetime.now(),
                                             'preview_image': preview_page_url,
                                             'description': "",
-                                            'type': forms_type
+                                            'type': forms_type,
+                                            'folder': folder
                                         }
                                         current_app.db.documents.insert_one(document_data)
 

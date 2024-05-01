@@ -1,6 +1,7 @@
 
 import os
 import json
+import werkzeug
 from datetime import datetime
 
 from email_validator import validate_email, EmailNotValidError
@@ -178,27 +179,34 @@ class BuyerSellersChatView(MethodView):
         
         if not user:
             return jsonify({'error': 'User not found'}), 200
-        
+
         # Extract receiver_id and message_content from request data
-        data = request.json
+        data = request.form
         receiver_id = data.get('receiver_id')
         property_id = data.get('property_id')
-        message_content = data.get('message')
+        message = data.get('message')
+        file = request.files.get('media_file')
 
-        if not receiver_id or not message_content:
-            return jsonify({"error": "Missing receiver_id or message"}), 200
+        print(message, file)
+
+        if not message and not file :
+            return jsonify({"error": "Missing message content"}), 200
+
+        if not receiver_id or not property_id:
+            return jsonify({"error": "Missing receiver_id or property_id"}), 200
         
         receiver = current_app.db.users.find_one({'uuid': receiver_id})
-        if not receiver:
-            return jsonify({"error": "Receiver not found'"}), 200
+        property = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
+
+        if not receiver or not property:
+            return jsonify({"error": "Receiver or property not found'"}), 200
         
         # Construct chat message document
         chat_message = {
             'property_id': property_id,
             'message_content': [
                 {
-                    'msg_id': user['uuid'],
-                    'message': message_content
+                    'msg_id': user['uuid']
                 }
             ],
             'key' : 'buyer_seller_messaging'
@@ -216,7 +224,27 @@ class BuyerSellersChatView(MethodView):
             topic_email = user['email']
         
         chat_message['buyer_id'] = buyer_id
-        chat_message['seller_id'] = seller_id   
+        chat_message['seller_id'] = seller_id  
+ 
+        if message:
+            chat_message['message_content'][0]['message']  = message
+        
+        if file and werkzeug.utils.secure_filename(file.filename):
+            # Check if the file has an allowed extension
+            allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx'}
+            if '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions:
+                org_filename = werkzeug.utils.secure_filename(file.filename)
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                filename = f"{timestamp}_{org_filename}"
+                user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'users_chat_media', str(user['uuid']))
+                os.makedirs(user_media_dir, exist_ok=True)
+                user_media_path = os.path.join(user_media_dir, filename)
+                file.save(user_media_path)
+                media_url = url_for('serve_media', filename=os.path.join('users_chat_media', str(user['uuid']), filename))
+                chat_message['message_content'][0]['media'] = media_url
+            else:
+                # Handle the case where the file has an invalid extension
+                return jsonify({"error": "Invalid file type. Allowed files are: png, jpg, jpeg, gif, pdf, doc, docx"}), 200
 
         if buyer_id == seller_id:
             return jsonify({"error": "Invalid User ids"}), 200
@@ -257,16 +285,20 @@ class ChatUsersListView(MethodView):
             buyer_id = user['uuid']
             receivers = list(current_app.db.buyer_seller_messaging.find({'buyer_id': buyer_id}, {'property_id': 1, 'seller_id': 1, '_id': 0}))
             for receiver in receivers:
-                seller_email = current_app.db.users.find_one({'uuid': receiver['seller_id']}, {'email': 1, '_id': 0})
-                receiver['owner_email'] = seller_email.get('email') if seller_email else None
+                seller = current_app.db.users.find_one({'uuid': receiver['seller_id']}, {'email': 1, 'first_name': 1, 'profile_pic': 1, '_id': 0})
+                receiver['owner_email'] = seller.get('email') if seller else None
+                receiver['first_name'] = seller.get('first_name') if seller else None
+                receiver['profile_pic'] = seller.get('profile_pic') if seller else None
             return jsonify(receivers), 200
 
         elif user_role == 'seller':
             seller_id = user['uuid']
             receivers = list(current_app.db.buyer_seller_messaging.find({'seller_id': seller_id}, {'property_id': 1, 'buyer_id': 1, '_id': 0}))
             for receiver in receivers:
-                buyer_email = current_app.db.users.find_one({'uuid': receiver['buyer_id']}, {'email': 1, '_id': 0})
-                receiver['email'] = buyer_email.get('email') if buyer_email else None
+                buyer = current_app.db.users.find_one({'uuid': receiver['buyer_id']}, {'email': 1,'first_name': 1,  'profile_pic': 1, '_id': 0})
+                receiver['email'] = buyer.get('email') if buyer else None
+                receiver['first_name'] = buyer.get('first_name') if buyer else None
+                receiver['profile_pic'] = buyer.get('profile_pic') if buyer else None
             return jsonify(receivers), 200
         else:
             return jsonify({'error': 'Unauthorized access'}), 200

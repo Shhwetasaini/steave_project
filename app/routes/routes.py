@@ -47,7 +47,6 @@ api_bp.add_url_rule(rule='user/properties/add/property-type-selection', view_fun
 api_bp.add_url_rule(rule='user/properties/add/infos', view_func=InfosView.as_view('property_infos'))
 api_bp.add_url_rule(rule='user/properties/add/save-pdf', view_func=SavePdfView.as_view('save_pdf'))
 api_bp.add_url_rule(rule='user/properties/add/checkout', view_func=CheckoutView.as_view('property_checkout'))
-api_bp.add_url_rule(rule='user/properties/add/validate-address', view_func=ValidateAddressView.as_view('validate_address'))
 
 api_bp.add_url_rule(rule='user/properties/list', view_func=SellerPropertyListView.as_view('user_properties_list'))   #individual seller properties
 api_bp.add_url_rule(rule='user/properties/buyers', view_func=SellerBuyersListView.as_view('user_properties_buyers'))
