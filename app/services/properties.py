@@ -2,8 +2,10 @@ import hashlib
 import os
 import uuid
 import logging
+from datetime import datetime
 
-from flask import current_app, request
+from flask import current_app, request, url_for
+from werkzeug.utils import secure_filename  
 import sendgrid
 from sendgrid.helpers.mail import Mail, Email, To
 from datetime import timezone
@@ -40,8 +42,8 @@ def create_property(property_data):
         data = {
             'images': [],
             'name': '',
-            'status': 'For Sale',
-            'address': property_data['address'],
+            'status': '',
+            'address': property_data['property_address'],
             'state': '',
             'city': '',
             'latitude': '',
@@ -52,17 +54,32 @@ def create_property(property_data):
             'property_type': property_data['property_type'],
             'description': '',
             'price': '',
-            'size': '',
-            'seller_id': property_data['seller_id'],
-            'owner_name': property_data['owner_name'],
-            'owner_bio': '',
-            'owner_email': property_data['owner_email'],
-            'owner_number': property_data['owner_number'],
-            'owner_profile': '',
-            'buyers':[]
+            'size': ''
         }
+
         current_app.db.properties.insert_one(data)
         logger.info("Property created successfully.")
+
+        #images = property_data.get('images')
+        #if images:
+        #    # Save images to file system or cloud storage and get their URLs
+        #    image_urls = []
+        #    for image in images:
+#
+        #        # Save image and get URL
+        #        org_filename = secure_filename(image.filename)
+        #        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        #        filename = f"{timestamp}_{org_filename}"
+        #        user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id))
+        #        os.makedirs(user_media_dir, exist_ok=True)
+#
+        #        image_path = os.path.join(user_media_dir, filename)
+        #        image.save(image_path)
+#
+        #        # Generate URL for accessing the saved image
+        #        image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), filename))
+        #        image_urls.append(image_url)
+      
         return True
     except Exception as e:
         logger.error(f"Error creating property: {str(e)}")

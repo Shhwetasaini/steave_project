@@ -8,10 +8,12 @@ import stripe
 import fitz
 import datetime
 from geopy.geocoders import GoogleV3
+from email_validator  import validate_email, EmailNotValidError
 
 from flask import session, current_app, request, jsonify
-from app.services.authentication import custom_jwt_required 
-
+from flask_jwt_extended import get_jwt_identity
+from app.services.authentication import custom_jwt_required
+from app.services.admin import log_request
 from flask.views import MethodView
 
 
@@ -36,6 +38,17 @@ stripe.api_key = STRIPE_SECRET_KEY
 class PropertyTypeSelectionView(MethodView):
     decorators = [custom_jwt_required()]
     def post(self):
+        log_request(request)
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         data = request.json
         property_type = data.get('property_type')
         property_address = data.get('seller_address')
@@ -60,7 +73,33 @@ class PropertyTypeSelectionView(MethodView):
         session['e_sign_data'] = {
             'property_type': property_type,
             'property_address': property_address,
+            'first_name': user['first_name'],
+            'last_name':  user['last_name'],
+            'email': user['email'],
+            'phone': user['phone'],
+            'user_id': user['uuid']
         }
+
+        return jsonify({'message':'data saved in session successfully.', 'data': session['e_sign_data']})
+
+
+
+class PropertyUploadImageView(MethodView):
+    decorators = [custom_jwt_required()]
+    def post(self):
+        log_request(request)
+        e_sign_data = session.get('e_sign_data')
+
+        if not e_sign_data:
+            return jsonify({'error':'Data not found in session for previous pannel.'})
+        
+        # Extract images from request
+        images = request.files.getlist("images")
+        if images:
+            e_sign_data['images'] =  images
+
+        session['e_sign_data'] = e_sign_data
+        logger.info('Session data at property_image_add_view: %s', e_sign_data)
 
         return jsonify({'message':'data saved in session successfully.', 'data': session['e_sign_data']})
 
@@ -69,6 +108,7 @@ class PropertyTypeSelectionView(MethodView):
 class InfosView(MethodView):
     decorators = [custom_jwt_required()]
     def post(self):
+        log_request(request)
         e_sign_data = session.get('e_sign_data')
 
         if not e_sign_data:
@@ -131,9 +171,9 @@ class SavePdfView(MethodView):
             binary_data = base64.b64decode(encoded_data)
             property_address = e_sign_data.get('property_address', '').lower()
             if 'mn' in property_address or 'minnesota' in property_address:
-                template_path = '/root/apis/mobile_app_apis/seller.pdf'
+                template_path = '/home/local/API/seller.pdf'
             elif 'fl' in property_address or 'florida' in property_address:
-                template_path = '/root/apis/mobile_app_apis/florida.pdf'
+                template_path = '/home/local/API/florida.pdf'
             else:
                 return jsonify({'error': 'Invalid property_address.'})
             
@@ -218,31 +258,23 @@ class CheckoutView(MethodView):
             logger.info("Charge created successfully.")
             logger.info(f"Address data retrieved from session: {address_data}")
 
-            payment_data = {
-                'amount':amount,
-                'session_data': address_data
-            }
+            #payment_data = {
+            #    'amount':amount,
+            #    'session_data': address_data
+            #}
+#
+            #current_app.db.payment.insert_one(payment_data)
+            #logger.info("Payment saved successfully.")
 
-            current_app.db.payment.insert_one(payment_data)
-            logger.info("Payment saved successfully.")
 
-            property_type = address_data.get('property_type')
-            property_address = address_data.get('property_address')
-            seller_name = address_data.get('first_name') + ' ' +address_data.get('last_name')
-            seller_email = address_data.get('email')
-            seller_number = address_data.get('phone')
-
-            seller_id = update_seller(address_data)
-            if not seller_id:
-                return jsonify({'error': 'Seller updation failed.'})
+            #seller_id = update_seller(address_data)
+            #if not seller_id:
+            #    return jsonify({'error': 'Seller updation failed.'})
 
             property_data = {
-                'property_type': property_type,
-                'address': property_address,
-                'seller_id': seller_id,
-                'owner_name': seller_name,
-                'owner_email': seller_email,
-                'owner_number': seller_number
+                'property_type': address_data.get('property_type'),
+                'property_type': address_data.get('property_address'),
+                'property_images' : address_data.get('images', None)
             }
 
             property= create_property(property_data)

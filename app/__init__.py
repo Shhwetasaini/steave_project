@@ -1,6 +1,7 @@
 import os
 import json
 import datetime
+import logging
 from flask_cors import CORS
 
 from flask import Flask
@@ -24,6 +25,7 @@ def create_app(config_name):
     config[config_name].init_app(app)
 
     jwt.init_app(app)
+    app.logger.setLevel(logging.INFO) 
     
     # Connect to mongoDB
     mongo_client = MongoClient(

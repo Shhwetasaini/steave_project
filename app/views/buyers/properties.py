@@ -236,12 +236,24 @@ class BuyerSellersChatView(MethodView):
                 org_filename = werkzeug.utils.secure_filename(file.filename)
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 filename = f"{timestamp}_{org_filename}"
-                user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'users_chat_media', str(user['uuid']))
+                user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid']), 'uploaded_docs')
                 os.makedirs(user_media_dir, exist_ok=True)
                 user_media_path = os.path.join(user_media_dir, filename)
                 file.save(user_media_path)
-                media_url = url_for('serve_media', filename=os.path.join('users_chat_media', str(user['uuid']), filename))
+                media_url = url_for('serve_media', filename=os.path.join('user_docs', str(user['uuid']), 'uploaded_docs', filename))
                 chat_message['message_content'][0]['media'] = media_url
+                document_data = {
+                    'name': filename,
+                    'url': media_url,
+                    'type': "chat",
+                    'uploaded_at': datetime.now()
+                }
+
+                # Update the uploaded_documents collection
+                current_app.db.users.update_one(
+                    {'uuid': user['uuid']},
+                    {'$push': {'uploaded_documents': document_data}}
+                )
             else:
                 # Handle the case where the file has an invalid extension
                 return jsonify({"error": "Invalid file type. Allowed files are: png, jpg, jpeg, gif, pdf, doc, docx"}), 200
