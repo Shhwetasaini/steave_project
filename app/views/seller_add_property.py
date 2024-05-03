@@ -6,11 +6,13 @@ import os
 import re
 import stripe
 import fitz
-import datetime
+from datetime import datetime
 from geopy.geocoders import GoogleV3
 from email_validator  import validate_email, EmailNotValidError
+from bson import ObjectId
+from werkzeug.utils import secure_filename
 
-from flask import session, current_app, request, jsonify
+from flask import session, current_app, request, jsonify, url_for
 from flask_jwt_extended import get_jwt_identity
 from app.services.authentication import custom_jwt_required
 from app.services.admin import log_request
@@ -19,7 +21,7 @@ from flask.views import MethodView
 
 from app.services.properties import (
     update_seller,
-    create_property,
+    create_transaction_property_lookup,
     generate_unique_name,
     get_client_ip,
     send_email,
@@ -34,13 +36,12 @@ stripe.api_key = STRIPE_SECRET_KEY
 
 
 
-
 class PropertyTypeSelectionView(MethodView):
     decorators = [custom_jwt_required()]
+
     def post(self):
         log_request(request)
         current_user = get_jwt_identity()
-
         try:
             validate_email(current_user)
             user = current_app.db.users.find_one({'email': current_user})
@@ -48,16 +49,40 @@ class PropertyTypeSelectionView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'}), 404
+            return jsonify({'error': 'User not found'})
+        
         data = request.json
-        property_type = data.get('property_type')
-        property_address = data.get('seller_address')
+        property_address = data.get('seller_address',None)
+        property_type = data.get('property_type',None)
+
+        if not property_address or not property_type:
+            return jsonify({"error":"seller_address and property_type field is required"})
+        
+        data = {
+            'property_type': property_type,
+            'property_address': property_address,
+            "name": data.get('name', None),
+            "status": data.get('status', None),
+            "state": data.get('state', None),
+            "city": data.get('city', None),
+            "latitude": float(data.get('latitude', 0.0) or 0.0),
+            "longitude": float(data.get('longitude', 0.0) or 0.0),
+            "beds": int(data.get('beds', 0) or 0),
+            "baths": int(data.get('baths', 0) or 0),
+            "kitchen": int(data.get('kitchen', 0) or 0),
+            "description": data.get('description', None),
+            "price": float(data.get('price', 0.0) or 0.0),
+            "size": data.get('size', None),
+            'first_name': user['first_name'],
+            'last_name': user['last_name'],
+            'email': user['email'],
+            'phone': user['phone'],
+            'user_id': user['uuid'],
+        }
 
         if property_address.isdigit():
-            return jsonify(
-                {'error':'Please enter a valid address with a combination of letters and numbers, including country, state, and postal code.'}
-            )
-
+          return jsonify({'error': 'seller_address and property_type field is required'})
+        
         # Check if the address contains "US" or "United States" or "États-Unis"
         if not re.search(r'\b(US|United States|USA|États-Unis|U\.S\.?)\b', property_address, flags=re.IGNORECASE):
             return jsonify({'error': 'Please enter a valid address in the United States.'})
@@ -69,96 +94,57 @@ class PropertyTypeSelectionView(MethodView):
         valid_address = validate_address(property_address)
         if not valid_address:
             return jsonify({'error': "Invalid Address. missing country, state or postal_code"})
+        
+        transaction_result = current_app.db.transaction.insert_one(data)
+        transaction_id = str(transaction_result.inserted_id)
 
-        session['e_sign_data'] = {
-            'property_type': property_type,
-            'property_address': property_address,
-            'first_name': user['first_name'],
-            'last_name':  user['last_name'],
-            'email': user['email'],
-            'phone': user['phone'],
-            'user_id': user['uuid']
-        }
-
-        return jsonify({'message':'data saved in session successfully.', 'data': session['e_sign_data']})
-
+        session['transaction_id'] = transaction_id
+        return jsonify({'message':'data saved in successfully.'})
 
 
 class PropertyUploadImageView(MethodView):
     decorators = [custom_jwt_required()]
-    def post(self):
-        log_request(request)
-        e_sign_data = session.get('e_sign_data')
 
-        if not e_sign_data:
+    def put(self):
+        log_request(request)
+        transaction_id = session.get('transaction_id')
+        if not transaction_id:
             return jsonify({'error':'Data not found in session for previous pannel.'})
         
+        transaction_data = current_app.db.transaction.find_one({"_id": ObjectId(transaction_id)})
         # Extract images from request
         images = request.files.getlist("images")
         if images:
-            e_sign_data['images'] =  images
+           image_urls = []
+           for image in images:
+               # Save image and get URL
+               org_filename = secure_filename(image.filename)
+               timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+               filename = f"{timestamp}_{org_filename}"
+               user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', transaction_data['user_id'], transaction_id)
+               os.makedirs(user_media_dir, exist_ok=True)
+               image_path = os.path.join(user_media_dir, filename)
+               image.save(image_path)
+               # Generate URL for accessing the saved image
+               image_url = url_for('serve_media', filename=os.path.join('user_properties', transaction_data['user_id'], transaction_id, filename))
+               image_urls.append(image_url)
 
-        session['e_sign_data'] = e_sign_data
-        logger.info('Session data at property_image_add_view: %s', e_sign_data)
-
-        return jsonify({'message':'data saved in session successfully.', 'data': session['e_sign_data']})
-
-
-
-class InfosView(MethodView):
-    decorators = [custom_jwt_required()]
-    def post(self):
-        log_request(request)
-        e_sign_data = session.get('e_sign_data')
-
-        if not e_sign_data:
-            return jsonify({'error':'Data not found in session for previous pannel.'})
-        
-        data = request.json
-        
-        e_sign_data['first_name'] = data.get('first_name')
-        e_sign_data['last_name'] = data.get('last_name')
-        e_sign_data['phone'] = data.get('phone') 
-        e_sign_data['email'] = data.get('email')
-
-        print(e_sign_data, "DFFDFD")
-
-        query = {"email": e_sign_data['email']}
-        existing_user = current_app.db.users.find_one(query)
-        print(existing_user, "kjkjkjk")
-
-        try:
-            parsed_number = phonenumbers.parse(e_sign_data['phone'], None)
-            if not phonenumbers.is_valid_number(parsed_number):
-                return jsonify({"error": "Invalid phone number."})
-        except phonenumbers.phonenumberutil.NumberParseException:
-            return jsonify({"error": "Invalid phone number format."})
-        except ValueError:
-            error = 'Invalid phone number'
-            return jsonify({"error": "Invalid phone number."})
-        
-        formatted_phone = phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
-        e_sign_data['phone'] = formatted_phone
-
-        if existing_user:
-            if existing_user['role'] != 'seller':
-                return jsonify({'error':'Unauthorized access.'})
-        else:
-            return jsonify({'error': "User does not exist."})
-  
-        session['e_sign_data'] = e_sign_data
-        logger.info('Session data at infos_view: %s', e_sign_data)
-
-        return jsonify({'message':'data saved in session successfully.', 'data': session['e_sign_data']})
+        current_app.db.transaction.update_one({"_id": ObjectId(transaction_id)}, {"$set": {"images": image_urls}})
+        session['transaction_id'] = transaction_id
+        logger.info('Session data at property_image_add_view: %s', transaction_id)
+        return jsonify({'message':'data saved in successfully.'})
 
 
 class SavePdfView(MethodView):
     decorators = [custom_jwt_required()]
     def post(self):
-        e_sign_data = session.get('e_sign_data')
+        log_request(request)
+        transaction_id = session.get('transaction_id')
 
-        if not e_sign_data:
+        if not transaction_id:
             return jsonify({'error':'Data not found in session for previous pannel.'})
+        
+        transaction = current_app.db.transaction.find_one({'_id': ObjectId(transaction_id)})
         
         template_pdf = None
         signature_pdf = None
@@ -169,7 +155,7 @@ class SavePdfView(MethodView):
             signature_data = data.get('signature_data')
             _, encoded_data = signature_data.split(',', 1)
             binary_data = base64.b64decode(encoded_data)
-            property_address = e_sign_data.get('property_address', '').lower()
+            property_address = transaction.get('property_address').lower()
             if 'mn' in property_address or 'minnesota' in property_address:
                 template_path = '/home/local/API/seller.pdf'
             elif 'fl' in property_address or 'florida' in property_address:
@@ -177,7 +163,7 @@ class SavePdfView(MethodView):
             else:
                 return jsonify({'error': 'Invalid property_address.'})
             
-            signer_name = f"{e_sign_data.get('first_name', '')}_{e_sign_data.get('last_name', '')}"
+            signer_name = f"{transaction.get('first_name', '')}_{transaction.get('last_name', '')}"
             folder_path = os.path.join(current_app.root_path, 'media', 'Home', 'sign')
             os.makedirs(folder_path, exist_ok=True)
             signature_file_name = f"{signer_name}_signature.png"
@@ -198,8 +184,25 @@ class SavePdfView(MethodView):
                 return jsonify({"error":"PDF does not have enough pages to insert the signature."})
             file_path = os.path.join(folder_path, generate_unique_name(folder_path, f"{signer_name}_signed_document.pdf"))
             template_pdf.save(file_path)
-            print("PDF successfully saved at:", file_path)
-            return jsonify({'message':'data saved in session successfully.'})
+            
+            doc_url = url_for('serve_media', filename=os.path.join('user_docs', transaction.get('user_id'), 'uploaded_docs', os.path.basename(file_path)))
+
+            document_data = {
+                'name': os.path.basename(file_path),
+                'url': doc_url,
+                'type': 'signed_property_contract',
+                'uploaded_at': datetime.now()
+            }
+
+            # Update the uploaded_documents collection
+            current_app.db.users.update_one(
+                {'uuid': transaction.get('user_id')},
+                {'$push': {'uploaded_documents': document_data}}
+            )
+            current_app.db.transaction.update_one({"_id": ObjectId(transaction_id)}, {"$set": {"signed_property_contract": doc_url}})
+            session['transaction_id'] = transaction_id
+            logger.info("PDF successfully saved at:", file_path)
+            return jsonify({'message':'data saved successfully.'})
         except Exception as e:
             print("Error during PDF generation:", str(e))
             return jsonify({'error': str(e)})
@@ -217,11 +220,13 @@ class CheckoutView(MethodView):
     def post(self):
         logger.info("Checkout process initiated.")
 
-        address_data = session.get('e_sign_data', {})
-        if not address_data:
+        transaction_id = session.get('transaction_id')
+        if not transaction_id:
             return jsonify({'error':'Data not found in session for previous pannel.'})
+        
+        transaction = current_app.db.transaction.find_one({'_id': ObjectId(transaction_id)})
+        
         logger.info("POST request received.")
-
         data = request.json
         
         token = data.get('token')
@@ -256,40 +261,24 @@ class CheckoutView(MethodView):
                 return jsonify({'error': 'Payment failed.'})
             
             logger.info("Charge created successfully.")
-            logger.info(f"Address data retrieved from session: {address_data}")
+            current_app.db.transaction.update_one({'_id':ObjectId(transaction_id)}, {'$set': {'amount': amount}})
+            
+            logger.info("Payment saved successfully.")
 
-            #payment_data = {
-            #    'amount':amount,
-            #    'session_data': address_data
-            #}
-#
-            #current_app.db.payment.insert_one(payment_data)
-            #logger.info("Payment saved successfully.")
-
-
-            #seller_id = update_seller(address_data)
-            #if not seller_id:
-            #    return jsonify({'error': 'Seller updation failed.'})
-
-            property_data = {
-                'property_type': address_data.get('property_type'),
-                'property_type': address_data.get('property_address'),
-                'property_images' : address_data.get('images', None)
-            }
-
-            property= create_property(property_data)
-            if not property:
+            property_id = create_transaction_property_lookup(transaction, transaction_id)
+            if not property_id:
                 return jsonify({'error': 'Failed to create property.'})
-
+            
+            
             subject = 'Welcome to Our Platform'
             message = 'Thank you for signing up. We appreciate your business.'
-            recipient_email = address_data.get('email', '')
+            recipient_email = transaction.get('email', '')
             
             # Replace `send_email` with your actual email sending function
             status_code, headers = send_email(subject, message, recipient_email)
             if status_code == 202:
                 logger.info("Email sent successfully.")
-                session['e_sign_data'] = None
+                session['transaction_id'] = None
                 return jsonify({'message': 'Property purchase succesfull.'})  # Specify the success URL
             else:
                 logger.error("Failed to send email.")
