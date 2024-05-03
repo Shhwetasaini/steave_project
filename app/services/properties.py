@@ -4,6 +4,7 @@ import uuid
 import logging
 from datetime import datetime
 
+from bson import ObjectId
 from flask import current_app, request, url_for
 from werkzeug.utils import secure_filename  
 import sendgrid
@@ -37,50 +38,42 @@ def update_seller(address_data):
         return None
 
 
-def create_property(property_data):
+def create_transaction_property_lookup(transaction, transaction_id):
     try:
-        data = {
-            'images': [],
-            'name': '',
-            'status': '',
-            'address': property_data['property_address'],
-            'state': '',
-            'city': '',
-            'latitude': '',
-            'longitude': '',
-            'beds': '',
-            'baths': '',
-            'kitchen': '',
-            'property_type': property_data['property_type'],
-            'description': '',
-            'price': '',
-            'size': ''
+        property_data = {
+            'type': transaction.get('property_type'),
+            'address': transaction.get('property_address'),
+            'images': transaction.get('images'),
+            'name': transaction.get('name'),
+            'status': transaction.get('status'),
+            'state': transaction.get('state'),
+            'city': transaction.get('city'),
+            'latitude': transaction.get('latitude'),
+            'longitude': transaction.get('longitude'),
+            'beds': transaction.get('beds'),
+            'baths': transaction.get('baths'),
+            'kitchen': transaction.get('kitchen'),
+            'description': transaction.get('description'),
+            'price': transaction.get('price'),
+            'size': transaction.get('size')
         }
-
-        current_app.db.properties.insert_one(data)
+        
+        result = current_app.db.properties.insert_one(property_data)
+        property_id = result.inserted_id
         logger.info("Property created successfully.")
 
-        #images = property_data.get('images')
-        #if images:
-        #    # Save images to file system or cloud storage and get their URLs
-        #    image_urls = []
-        #    for image in images:
-#
-        #        # Save image and get URL
-        #        org_filename = secure_filename(image.filename)
-        #        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        #        filename = f"{timestamp}_{org_filename}"
-        #        user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id))
-        #        os.makedirs(user_media_dir, exist_ok=True)
-#
-        #        image_path = os.path.join(user_media_dir, filename)
-        #        image.save(image_path)
-#
-        #        # Generate URL for accessing the saved image
-        #        image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), filename))
-        #        image_urls.append(image_url)
+        # Create lookup table entry for property, seller IDs, and list of realtors
+        lookup_data = {
+            "transaction_id": transaction_id,
+            "property_id": str(property_id),
+            "seller_id": transaction.get('user_id'),
+            "realtors": []  
+        }
+
+        # Insert lookup data into the lookup table
+        current_app.db.property_seller_lookup.insert_one(lookup_data)
       
-        return True
+        return str(property_id)
     except Exception as e:
         logger.error(f"Error creating property: {str(e)}")
         return False

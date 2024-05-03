@@ -44,7 +44,7 @@ api_bp.add_url_rule(rule='/docs', view_func=AllDocsView.as_view('docs'))
 
 #api_bp.add_url_rule(rule='user/properties/add', view_func=SellersPropertyAddView.as_view('user_properties_add'))
 api_bp.add_url_rule(rule='user/properties/add/property-type-selection', view_func=PropertyTypeSelectionView.as_view('property_type_selection'))
-api_bp.add_url_rule(rule='user/properties/add/infos', view_func=InfosView.as_view('property_infos'))
+api_bp.add_url_rule(rule='user/properties/add/upload-image', view_func=PropertyUploadImageView.as_view('property_images'))
 api_bp.add_url_rule(rule='user/properties/add/save-pdf', view_func=SavePdfView.as_view('save_pdf'))
 api_bp.add_url_rule(rule='user/properties/add/checkout', view_func=CheckoutView.as_view('property_checkout'))
 
