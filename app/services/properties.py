@@ -15,64 +15,11 @@ from geopy.geocoders import GoogleV3
 logger = logging.getLogger(__name__)
 
 
-def update_seller(address_data):
-    try:
-        address_data.pop('property_type',None)
-        address_data.pop('property_address',None)
-
-        data = {
-            'first_name': address_data.get('first_name'),
-            'last_name': address_data.get('last_name'),
-            'phone': address_data.get('phone')
-        }
-        current_app.db.users.find_one_and_update(
-            {"email": address_data.get('email')},
-            {"$set": data},
-        )
-        existing_user_data = current_app.db.users.find_one({"email": address_data.get('email')})
-        logger.info("Seller updated successfully.")
-        return existing_user_data['uuid']
-      
-    except Exception as e:
-        logger.error(f"Error creating or updating seller: {str(e)}")
-        return None
-
-
-def create_transaction_property_lookup(transaction, transaction_id):
-    try:
-        property_data = {
-            'type': transaction.get('property_type'),
-            'address': transaction.get('property_address'),
-            'images': transaction.get('images'),
-            'name': transaction.get('name'),
-            'status': transaction.get('status'),
-            'state': transaction.get('state'),
-            'city': transaction.get('city'),
-            'latitude': transaction.get('latitude'),
-            'longitude': transaction.get('longitude'),
-            'beds': transaction.get('beds'),
-            'baths': transaction.get('baths'),
-            'kitchen': transaction.get('kitchen'),
-            'description': transaction.get('description'),
-            'price': transaction.get('price'),
-            'size': transaction.get('size')
-        }
-        
+def create_property(property_data):
+    try: 
         result = current_app.db.properties.insert_one(property_data)
         property_id = result.inserted_id
         logger.info("Property created successfully.")
-
-        # Create lookup table entry for property, seller IDs, and list of realtors
-        lookup_data = {
-            "transaction_id": transaction_id,
-            "property_id": str(property_id),
-            "seller_id": transaction.get('user_id'),
-            "realtors": []  
-        }
-
-        # Insert lookup data into the lookup table
-        current_app.db.property_seller_lookup.insert_one(lookup_data)
-      
         return str(property_id)
     except Exception as e:
         logger.error(f"Error creating property: {str(e)}")

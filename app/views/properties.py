@@ -17,98 +17,6 @@ from app.services.authentication import custom_jwt_required
 from app.views.notifications import store_notification
 
 
-#def property_dummy_data_insert():
-#    properties_collection = current_app.db.properties
-#    with open('app/properties.json', 'r') as file:
-#        property_data = json.load(file)
-#    properties_collection.insert_many(property_data)
-#
-#
-#class SellersDummyPropertyListView(MethodView):
-#    def get(self):
-#        log_request(request)
-#        current_user = get_jwt_identity()
-#
-#        try:
-#            validate_email(current_user)
-#            user = current_app.db.users.find_one({'email': current_user})
-#        except EmailNotValidError:
-#            user = current_app.db.users.find_one({'uuid': current_user})
-#        
-#        if not user:
-#            return jsonify({'error': 'User not found'}), 200
-#        
-#        user_role = user.get('role')
-#        if user_role != 'seller':
-#            return jsonify({'error': 'Unauthorized access'}), 200
-#        
-#        unsold_properties = list(current_app.db.properties.find({'seller_id': {'$exists': False}}))
-#
-#        if unsold_properties:
-#            for property in unsold_properties:
-#                property['property_id'] = str(property['_id'])
-#                property.pop('_id', None)
-#            
-#            return jsonify(unsold_properties), 200
-#        else:
-#            property_dummy_data_insert()
-#            return jsonify({'message': 'Please check again!'}), 200
-#
-#
-#class MobileAppSellersDummyPropertyAddView(MethodView):      #Temporary View- Only for mobile app sellers 
-#    decorators = [custom_jwt_required()]
-#
-#    def get(self):
-#        log_request(request)
-#        current_user = get_jwt_identity()
-#
-#        unsold_properties = list(current_app.db.properties.find({'seller_id': {'$exists': False}}))
-#        if not unsold_properties or len(unsold_properties) < 3:
-#            property_dummy_data_insert()
-#            unsold_properties = list(current_app.db.properties.find({'seller_id': {'$exists': False}}))
-#        
-#        # Select three random properties from unsold_properties
-#        random_properties = random.sample(unsold_properties, 3)
-#        property_ids = [property['_id'] for property in random_properties]
-#       
-#
-#        try:
-#            validate_email(current_user)
-#            user = current_app.db.users.find_one({'email': current_user})
-#        except EmailNotValidError:
-#            user = current_app.db.users.find_one({'uuid': current_user})
-#        
-#        if not user:
-#            return jsonify({'error': 'User not found'}), 200
-#        
-#        user_role = user.get('role')
-#        if user_role != 'seller':
-#            return jsonify({'error': 'Unauthorized access'}), 200
-#        
-#        for property_id in property_ids:
-#            property_id = ObjectId(property_id)
-#
-#            # Check if the property is already assigned to a seller
-#            existing_property = current_app.db.properties.find_one({'_id': property_id, 'seller_id': {'$exists': True}})
-#            if existing_property:
-#                continue
-#            
-#            # Update property document to add the seller's ID
-#            current_app.db.properties.update_one(
-#                {'_id': property_id},
-#                {'$set': {'seller_id': user['uuid']}}
-#            )
-#        
-#        store_notification(
-#            user_id=user['uuid'], 
-#            title="Add Property",
-#            message="property added successfully",
-#            type="property"
-#        )
-#        return jsonify({'message': 'properties added to the seller successfully'}), 200
-#
-
-
 class SellerPropertyListView(MethodView):
     decorators = [custom_jwt_required()]
 
@@ -126,22 +34,35 @@ class SellerPropertyListView(MethodView):
             return jsonify({'error': 'User not found'}), 200
         
         user_role = user.get('role')
-        if user_role != 'realtor' and not current_app.db.property_seller_lookup.find_one({"seller_id": [user['uuid']]}):
+        if user_role == 'realtor':
             return jsonify({'error': 'Unauthorized access'}), 200
 
         # Get properties associated with the seller
-        properties = current_app.db.properties.find({"_id": {"$in": current_app.db.property_seller_lookup.find_one({"seller_id": [user['uuid']]})['property_id']}})
+        property_transactions = current_app.db.property_seller_transaction.find({'seller_id': user['uuid']})
 
         # Construct response
         property_list = []
-        for prop in properties:
-            prop["_id"] = str(prop["_id"])
-            property_list.append(prop)
+        for prop_transaction in property_transactions:
+            property_id = prop_transaction.get('property_id')
+            # Fetch property details from properties collection
+            property_info = current_app.db.properties.find_one({'_id': ObjectId(property_id)}, {'_id': 0})
+            if property_info:
+                property_info['property_id'] = property_id
+                owner_info = {
+                    'name': user.get('first_name') + " " + user.get('last_name'),
+                    'phone': user.get('phone'),
+                    'email': user.get('email'),
+                    'profile': user.get('profile_pic')
+                }
+                property_info['owner_info'] = owner_info
+                property_list.append(property_info)
+            else:
+                property_list.append(None)
 
-        return jsonify(property_list), 200
-    
+        return jsonify({'properties': property_list}), 200
 
-class PropertyListView(MethodView):
+
+class AllPropertyListView(MethodView):
     decorators = [custom_jwt_required()]
 
     def get(self):
@@ -150,73 +71,26 @@ class PropertyListView(MethodView):
 
         property_list = []
         for prop in properties:
-            lookup_info = current_app.db.property_seller_lookup.find_one({"property_id": prop['_id']})
-            seller_ids = lookup_info.get("seller_id", [])
-            seller_info_list = []
-            for seller_id in seller_ids:
-                seller_info = current_app.db.users.find_one({'uuid': seller_id})
-                if seller_info:
-                    seller_info_list.append({
-                        "name": seller_info.get("name"),
-                        "email": seller_info.get("email"),
-                        "phone": seller_info.get("phone"),
-                        # Add any other seller information you want to include
-                    })
-
-            property_list.append({
-                "_id": str(prop['_id']),
-                "name": prop.get("name"),
-                "status": prop.get("status"),
-                "address": prop.get("address"),
-                "city": prop.get("city"),
-                "state": prop.get("state"),
-                "latitude": prop.get("latitude"),
-                "longitude": prop.get("longitude"),
-                "beds": prop.get("beds"),
-                "baths": prop.get("baths"),
-                "kitchen": prop.get("kitchen"),
-                "property_type": prop.get("property_type"),
-                "description": prop.get("description"),
-                "price": prop.get("price"),
-                "size": prop.get("size"),
-                "images": prop.get("images"),
-                "seller_info": seller_info_list
-            })
-
+            lookup_info = current_app.db.property_seller_transaction.find_one({'property_id': str(prop['_id'])})
+            if lookup_info: 
+                property_id = str(prop.pop('_id', None))
+                prop['property_id'] = property_id
+                seller = current_app.db.users.find_one({'uuid': lookup_info['seller_id']})
+                if seller:
+                    owner_info = {
+                        'name': seller.get('first_name') + " " + seller.get('last_name'),
+                        'phone': seller.get('phone'),
+                        'email': seller.get('email'),
+                        'profile': seller.get('profile_pic')
+                    }
+                    prop['owner_info'] = owner_info
+                else:
+                    prop['owner_info'] = None          # External properties
+                
+                property_list.append(prop)
+            else:
+                continue  # Invalid/Incomplete transaction properties
         return jsonify(property_list), 200
-
-
-#class SellerPropertyListView(MethodView):
-#    decorators = [custom_jwt_required()]
-#
-#    def get(self):
-#        log_request(request)
-#        current_user = get_jwt_identity()
-#
-#        try:
-#            validate_email(current_user)
-#            user = current_app.db.users.find_one({'email': current_user})
-#        except EmailNotValidError:
-#            user = current_app.db.users.find_one({'uuid': current_user})
-#        
-#        if not user:
-#            return jsonify({'error': 'User not found'}), 200
-#        
-#        user_role = user.get('role')
-#        if user_role != 'realtor':
-#            return jsonify({'error': 'Unauthorized access'}), 200
-#        
-#        # Retrieve properties listed by the seller
-#        properties = current_app.db.properties.find({'seller_id': user['uuid']})
-#        
-#        # Prepare response with property details
-#        property_list = []
-#        for property in properties:
-#            property['property_id'] = str(property['_id'])
-#            property.pop('_id', None)
-#            property_list.append(property)
-#        
-#        return jsonify(property_list), 200
 
 
 class SellerBuyersListView(MethodView):
@@ -294,20 +168,20 @@ class PropertyUpdateView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
 
         updatable_fields = [
-            'owner_bio', 'description', 'price', 'size', 
+            'description', 'price', 'size', 
             'name', 'status', 'address', 'state', 'city', 
             'latitude', 'longitude', 'beds', 'baths', 'kitchen'
         ]
         
         if user:
-            if user.get('role') != 'seller':
+            if user.get('role') == 'realtor':
                 return jsonify({'error': 'Unauthorized access'}), 200
             try:
-            
-                property_data = current_app.db.find_one({'_id': ObjectId(property_id), 'seller_id': user['uuid']})
+                property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
+                property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
 
-                if property_data is None:
-                    return jsonify({'error': 'Property not found'}), 200
+                if property_data is None or property_seller_data is None:
+                    return jsonify({'error': 'Property does not Exists or you are not allowed to update this property'}), 200
 
                 # Update only the fields that are included in the request JSON and are updatable
                 for key, value in request.json.items():
@@ -315,11 +189,11 @@ class PropertyUpdateView(MethodView):
                         property_data[key] = value
 
                 # Update the property document in MongoDB
-                current_app.db.update_one({'_id': ObjectId(property_id)}, {'$set': property_data})
+                current_app.db.properties.update_one({'_id': ObjectId(property_id)}, {'$set': property_data})
 
                 return jsonify({'message': 'Property information updated successfully'}), 200
             except Exception as e:
-                return jsonify({'error': str(e)}), 500
+                return jsonify({'error': str(e)}), 200
         else:
             return jsonify({'error': 'User not found'}), 200
 
@@ -338,21 +212,20 @@ class PropertyImageAddView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
 
         if user:
-            if user.get('role') != 'seller':
+            if user.get('role') == 'realtor':
                 return jsonify({'error': 'Unauthorized access'}), 200
             
             property_id = request.form.get('property_id')
             file = request.files.get('image')
 
-            print(property_id, file)
-
             if not file or not property_id:
                 return jsonify({'error': 'File or property_id is missing!'}), 200
 
-            property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id), 'seller_id': user['uuid']})
+            property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
+            property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
 
-            if not property_data:
-              return jsonify({'error': 'Property does not Exists'}), 200
+            if property_data is None or property_seller_data is None:
+                return jsonify({'error': 'Property does not Exists or you are not allowed to upload image to this property'}), 200
 
             # Check if the file with the same name already exists in the folder
             org_filename = secure_filename(file.filename)
@@ -377,7 +250,7 @@ class PropertyImageAddView(MethodView):
 
             # Update the user's properties in the database
             result = current_app.db.properties.update_one(
-                {'seller_id': user['uuid'], '_id': ObjectId(property_id)},
+                {'_id': ObjectId(property_id)},
                 {'$set': {'images': property_data['images']}}
             )
 
@@ -396,7 +269,7 @@ class PropertyImageAddView(MethodView):
           return jsonify({'error': 'User not found'}), 200
 
 
-class PropertyImageDeleteView(MethodView):
+class PropertyImageDeleteView(MethodView):  #not working
     decorators = [custom_jwt_required()]
     
     def delete(self):
@@ -410,46 +283,41 @@ class PropertyImageDeleteView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
 
         if user:
-            if user.get('role') != 'seller':
+            if user.get('role') == 'realtor':
                 return jsonify({'error': 'Unauthorized access'}), 200
             
             data = request.json
             property_id = data.get('property_id')
-            image_name = data.get('image_name')
+            image_url = data.get('image_url')
 
-            if not property_id or not image_name:
+            if not property_id or not image_url:
                 return jsonify({'error': 'property_id or image_name is missing in the request body'}), 200
 
-            # Retrieve property data from the database
-            property_data = current_app.db.properties.find_one(
-                {'seller_id': user['uuid'], '_id': ObjectId(property_id)}
-            )
+            
+            property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
+            property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
+
+            if property_data is None or property_seller_data is None:
+                return jsonify({'error': 'Property does not Exists or you are not allowed to delete image to this property'}), 200
 
             if not property_data:
                 return jsonify({'error': 'Property not found'}), 200
 
-            # Find the image to delete
-            image_to_delete = None
-            for image in property_data['images']:
-                if image['name'] == image_name:
-                    image_to_delete = image
-                    break
+            # Remove the image URL from property_data's images list
+            property_data['images'].remove(image_url)
 
-            if not image_to_delete:
-              return jsonify({'error': 'Image not found'}), 200
-
-            # Update the user's properties in the database to remove the image
+            # Update the user's properties in the database to reflect the removed image
             result = current_app.db.properties.update_one(
-                {'seller_id': user['uuid'], '_id': ObjectId(property_id)},
-                {'$pull': {'images': {'name': image_name}}}
+                {'_id': ObjectId(property_id)},
+                {'$set': {'images': property_data['images']}}
             )
 
             if result.modified_count == 0:
-                return jsonify({'error': 'Image not found in the database'}), 200
+                return jsonify({'error': 'Failed to delete the image'}), 200
 
             # Delete the image from the folder
             user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id))
-            image_path = os.path.join(user_media_dir, image_name)
+            image_path = os.path.join(user_media_dir, image_url)
             if os.path.exists(image_path):
                 os.remove(image_path)
             
