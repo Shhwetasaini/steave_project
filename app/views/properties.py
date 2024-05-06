@@ -157,7 +157,6 @@ class SellerSinglePropertyBuyersListView(MethodView):
 
 class PropertyUpdateView(MethodView):
     decorators = [custom_jwt_required()]
-    
     def put(self, property_id):
         log_request(request)
         current_user = get_jwt_identity()
@@ -166,107 +165,54 @@ class PropertyUpdateView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-
-        updatable_fields = [
-            'description', 'price', 'size', 
-            'name', 'status', 'address', 'state', 'city', 
-            'latitude', 'longitude', 'beds', 'baths', 'kitchen'
-        ]
-        
-        if user:
-            if user.get('role') == 'realtor':
-                return jsonify({'error': 'Unauthorized access'}), 200
-            try:
-                property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
-                property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
-
-                if property_data is None or property_seller_data is None:
-                    return jsonify({'error': 'Property does not Exists or you are not allowed to update this property'}), 200
-
-                # Update only the fields that are included in the request JSON and are updatable
-                for key, value in request.json.items():
-                    if key in updatable_fields:
-                        property_data[key] = value
-
-                # Update the property document in MongoDB
-                current_app.db.properties.update_one({'_id': ObjectId(property_id)}, {'$set': property_data})
-
-                return jsonify({'message': 'Property information updated successfully'}), 200
-            except Exception as e:
-                return jsonify({'error': str(e)}), 200
-        else:
-            return jsonify({'error': 'User not found'}), 200
-
-
-class PropertyImageAddView(MethodView):
-    decorators = [custom_jwt_required()]
-
-    def post(self):
-        log_request(request)
-        current_user = get_jwt_identity()
-
-        try:
-            validate_email(current_user)
-            user = current_app.db.users.find_one({'email': current_user})
-        except EmailNotValidError:
-            user = current_app.db.users.find_one({'uuid': current_user})
-
         if user:
             if user.get('role') == 'realtor':
                 return jsonify({'error': 'Unauthorized access'}), 200
             
-            property_id = request.form.get('property_id')
-            file = request.files.get('image')
-
-            if not file or not property_id:
-                return jsonify({'error': 'File or property_id is missing!'}), 200
-
             property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
             property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
 
             if property_data is None or property_seller_data is None:
-                return jsonify({'error': 'Property does not Exists or you are not allowed to upload image to this property'}), 200
-
-            # Check if the file with the same name already exists in the folder
-            org_filename = secure_filename(file.filename)
-            user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id))
-            os.makedirs(user_media_dir, exist_ok=True)
-
-            if os.path.exists(os.path.join(user_media_dir, org_filename)):
-                return jsonify({'error': 'File with the same name already exists in the folder'}), 200
-
-            # Check if the file with the same name already exists in the database
-            if any(image['name'] == org_filename for image in property_data['images']):
-              return jsonify({'error': 'File with the same name already exists in the database'}), 200
-
-            image_path = os.path.join(user_media_dir, org_filename)
-            file.save(image_path)
-
-            # Generate URL for accessing the saved image
-            image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), org_filename))
-    
-            # Update property_data with image information
-            property_data['images'].append(image_url)
-
-            # Update the user's properties in the database
-            result = current_app.db.properties.update_one(
-                {'_id': ObjectId(property_id)},
-                {'$set': {'images': property_data['images']}}
-            )
-
-            if result.modified_count == 0:
-                return jsonify({'error': 'Property not found in the database'}), 200
-
-            store_notification(
-                user_id=user['uuid'], 
-                title="Update Property",
-                message="image added successfully",
-                type="property"
-            )
-            return jsonify({'message': 'Image added successfully'}), 200
-        
+                return jsonify({'error': 'Property does not Exists or you are not allowed to update this property'}), 200
+            
+            # Update property data
+            updatable_fields = [
+                'description', 'price', 'size',
+                'name', 'status', 'address', 'state', 'city',
+                'latitude', 'longitude', 'beds', 'baths', 'kitchen', 'image',
+            ]
+            for key, value in request.form.items():
+                if key in updatable_fields:
+                    property_data[key] = value
+            # Update property document in MongoDB
+            current_app.db.properties.update_one({'_id': ObjectId(property_id)}, {'$set': property_data})
+            # Add image if provided
+            if 'image' in request.files:
+                file = request.files['image']
+                org_filename = secure_filename(file.filename)
+                user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id))
+                os.makedirs(user_media_dir, exist_ok=True)
+                if os.path.exists(os.path.join(user_media_dir, org_filename)):
+                    return jsonify({'error': 'File with the same name already exists in the folder'}), 200
+                if any(image['name'] == org_filename for image in property_data.get('images', [])):
+                    return jsonify({'error': 'File with the same name already exists in the database'}), 200
+                image_path = os.path.join(user_media_dir, org_filename)
+                file.save(image_path)
+                image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), org_filename))
+                property_data.setdefault('images', []).append(image_url)
+                current_app.db.properties.update_one(
+                    {'_id': ObjectId(property_id)},
+                    {'$set': {'images': property_data['images']}}
+                )
+                store_notification(
+                    user_id=user['uuid'], 
+                    title="Update Property",
+                    message="image added successfully",
+                    type="property"
+                )
+            return jsonify({'message': 'Property information updated successfully'}), 200
         else:
-          return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 200
 
 
 class PropertyImageDeleteView(MethodView):  #not working
