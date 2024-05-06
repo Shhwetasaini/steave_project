@@ -1,6 +1,6 @@
 
 import os
-import random
+import re
 import json
 from datetime import datetime
 from bson import ObjectId
@@ -15,6 +15,7 @@ from werkzeug.utils import secure_filename
 from app.services.admin import log_request
 from app.services.authentication import custom_jwt_required
 from app.views.notifications import store_notification
+from app.services.properties import validate_address
 
 
 class SellerPropertyListView(MethodView):
@@ -168,22 +169,52 @@ class PropertyUpdateView(MethodView):
         if user:
             if user.get('role') == 'realtor':
                 return jsonify({'error': 'Unauthorized access'}), 200
-            
             property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
             property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
-
             if property_data is None or property_seller_data is None:
                 return jsonify({'error': 'Property does not Exists or you are not allowed to update this property'}), 200
-            
-            # Update property data
             updatable_fields = [
                 'description', 'price', 'size',
                 'name', 'status', 'address', 'state', 'city',
                 'latitude', 'longitude', 'beds', 'baths', 'kitchen', 'image',
             ]
+            
             for key, value in request.form.items():
                 if key in updatable_fields:
-                    property_data[key] = value
+                    if key == "address":
+                        if property_data[key].isdigit():
+                            return jsonify({'error': 'seller_address and property_type field is required'})
+                        
+                        # Check if the address contains "US" or "United States" or "États-Unis"
+                        if not re.search(r'\b(US|United States|USA|États-Unis|U\.S\.?)\b', property_data[key], flags=re.IGNORECASE):
+                            return jsonify({'error': 'Please enter a valid address in the United States.'})
+                        
+                        # Check if seller_property_address is present in e_sign_data and contains mn, minnesota, fl, or florida
+                        if not any(keyword in  property_data[key].lower() for keyword in ['mn', 'minnesota', 'fl', 'florida']):
+                            return jsonify({'error': "The address must be located in Minnesota (MN) or Florida (FL)."})
+                        
+                        valid_address = validate_address(property_data[key])
+                        if not valid_address:
+                            return jsonify({'error': "Invalid Address. missing country, state or postal_code"})
+                        
+                        property_data[key] = value
+
+                    elif key in ["price", "longitude", "latitude"]:
+                        try:
+                            property_data[key] = float(value)
+                        except ValueError:
+                            if value.strip() != '':
+                                return jsonify({'error':'only float values are accepted for price, longitude, latitude'})
+                            pass
+                    
+                    elif key in ["beds", "baths", "kitchen"]:
+                        try:
+                            property_data[key] = int(value)
+                        except ValueError:
+                            if value.strip() != '':
+                                return jsonify({'error':'only integer values are accepted for beds, baths, kitchen'})
+                            pass
+
             # Update property document in MongoDB
             current_app.db.properties.update_one({'_id': ObjectId(property_id)}, {'$set': property_data})
             # Add image if provided
@@ -192,10 +223,13 @@ class PropertyUpdateView(MethodView):
                 org_filename = secure_filename(file.filename)
                 user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id))
                 os.makedirs(user_media_dir, exist_ok=True)
+                
                 if os.path.exists(os.path.join(user_media_dir, org_filename)):
                     return jsonify({'error': 'File with the same name already exists in the folder'}), 200
-                if any(image['name'] == org_filename for image in property_data.get('images', [])):
+                # Check if image with same name already exists in database
+                if any(org_filename == image_name for image_name in [image.split('/')[-1] for image in property_data.get('images', [])]):
                     return jsonify({'error': 'File with the same name already exists in the database'}), 200
+                
                 image_path = os.path.join(user_media_dir, org_filename)
                 file.save(image_path)
                 image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), org_filename))
@@ -205,7 +239,7 @@ class PropertyUpdateView(MethodView):
                     {'$set': {'images': property_data['images']}}
                 )
                 store_notification(
-                    user_id=user['uuid'], 
+                    user_id=user['uuid'],
                     title="Update Property",
                     message="image added successfully",
                     type="property"
@@ -215,7 +249,7 @@ class PropertyUpdateView(MethodView):
             return jsonify({'error': 'User not found'}), 200
 
 
-class PropertyImageDeleteView(MethodView):  #not working
+class PropertyImageDeleteView(MethodView): 
     decorators = [custom_jwt_required()]
     
     def delete(self):
@@ -235,21 +269,39 @@ class PropertyImageDeleteView(MethodView):  #not working
             data = request.json
             property_id = data.get('property_id')
             image_url = data.get('image_url')
-
+            
             if not property_id or not image_url:
                 return jsonify({'error': 'property_id or image_name is missing in the request body'}), 200
 
-            
             property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
             property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
+            
+
 
             if property_data is None or property_seller_data is None:
                 return jsonify({'error': 'Property does not Exists or you are not allowed to delete image to this property'}), 200
 
+
             if not property_data:
                 return jsonify({'error': 'Property not found'}), 200
+            
 
-            # Remove the image URL from property_data's images list
+            file_name = os.path.basename(image_url)
+           
+            # Delete the file from the server
+            user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id))
+            file_path = os.path.join(user_media_dir, file_name)
+
+            if not os.path.exists(file_path):
+                return jsonify({"error":"file does not exits "})
+            
+            property_images = property_data.get('images')
+            if image_url not in property_images:
+                return jsonify({"error":"file does not exits "})
+            
+            os.remove(file_path)
+
+           # Remove the image URL from property_data's images list
             property_data['images'].remove(image_url)
 
             # Update the user's properties in the database to reflect the removed image
@@ -261,12 +313,7 @@ class PropertyImageDeleteView(MethodView):  #not working
             if result.modified_count == 0:
                 return jsonify({'error': 'Failed to delete the image'}), 200
 
-            # Delete the image from the folder
-            user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id))
-            image_path = os.path.join(user_media_dir, image_url)
-            if os.path.exists(image_path):
-                os.remove(image_path)
-            
+       
             store_notification(
                 user_id=user['uuid'], 
                 title="Update Property",

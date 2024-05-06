@@ -107,7 +107,7 @@ class PropertyTypeSelectionView(MethodView):
             'phone': user['phone'],
             'user_id': user['uuid']
         }
-
+        property_data.pop('_id',None)
         transaction_result = current_app.db.transaction.insert_one({
             'property_data': property_data,
             'user_info': user_info,
