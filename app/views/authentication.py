@@ -41,8 +41,8 @@ class RegisterUserView(MethodView):
         if not role:
             role=None
         
-        if not all([uuid_val, password, email, phone]):
-            return jsonify({"error": "uuid, password, email, or phone is missing!"}), 200
+        if not all([uuid_val, password, email, phone, first_name, last_name]):
+            return jsonify({"error": "uuid, password, email, phone, first_name or last_name is missing!"}), 200
         
         if role and role not in ['realtor']:
             return jsonify({"error": "Invalid user role!"}), 200

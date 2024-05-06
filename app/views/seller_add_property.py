@@ -137,7 +137,7 @@ class PropertyUploadImageView(MethodView):
             return jsonify({'error':'Invalid Transaction'})
 
         if images:
-            #try:
+            try:
                 image_urls = []
                 for image in images:
                     # Save image and get URL
@@ -169,11 +169,12 @@ class PropertyUploadImageView(MethodView):
                     {"_id": ObjectId(transaction_id)},
                     {"$set": {"property_data.images": image_urls}}
                 )
-            #except Exception as e:
-            #    logger.error(f"Error Uploading property images: {str(e)}")
-            #    return jsonify({'error':'Failed to upload image'})
+                uploaded_images = len(image_urls)
+            except Exception as e:
+                logger.error(f"Error Uploading property images: {str(e)}")
+                return jsonify({'error':'Failed to upload image'})
 
-        return jsonify({'message':'data saved successfully.'})
+        return jsonify({'message':'data saved successfully.', 'uploaded_images':uploaded_images})
 
 
 class SavePdfView(MethodView):
@@ -198,7 +199,7 @@ class SavePdfView(MethodView):
         try:
             _, encoded_data = signature_data.split(',', 1)
             binary_data = base64.b64decode(encoded_data)
-            property_address = transaction.get('property_address').lower()
+            property_address = transaction.get('property_data')['address'].lower()
             if 'mn' in property_address or 'minnesota' in property_address:
                 template_path = '/home/local/API/seller.pdf'
             elif 'fl' in property_address or 'florida' in property_address:
@@ -206,7 +207,7 @@ class SavePdfView(MethodView):
             else:
                 return jsonify({'error': 'Invalid property_address.'})
             
-            signer_name = f"{transaction.get('first_name', '')}_{transaction.get('last_name', '')}"
+            signer_name = f"{transaction.get('user_info')['first_name']}_{transaction.get('user_info')['last_name']}"
             folder_path = os.path.join(current_app.root_path, 'media', 'Home', 'sign')
             os.makedirs(folder_path, exist_ok=True)
             signature_file_name = f"{signer_name}_signature.png"
