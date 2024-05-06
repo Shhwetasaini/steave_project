@@ -8,7 +8,6 @@ from app.views.properties import *
 from app.views.admin.documents import *
 from app.views.admin.messaging import *
 from app.views.admin.users  import *
-from app.views.buyers.users import *
 from app.views.buyers.properties import *
 
 
@@ -50,13 +49,11 @@ api_bp.add_url_rule(rule='user/properties', view_func=AllPropertyListView.as_vie
 #api_bp.add_url_rule(rule='user/properties/buyers', view_func=SellerBuyersListView.as_view('user_properties_buyers'))
 #api_bp.add_url_rule(rule='user/properties/buyers/<string:property_id>', view_func=SellerSinglePropertyBuyersListView.as_view('user_singleproperty_buyers'))
 api_bp.add_url_rule(rule='user/properties/<string:property_id>', view_func=PropertyUpdateView.as_view('user_properties_update'))
-api_bp.add_url_rule(rule='user/properties/image/add', view_func=PropertyImageAddView.as_view('user_properties_image_add'))
-#api_bp.add_url_rule(rule='user/properties/image/remove', view_func=PropertyImageDeleteView.as_view('user_properties_image_remove'))
+api_bp.add_url_rule(rule='user/properties/image/remove', view_func=PropertyImageDeleteView.as_view('user_properties_image_remove'))
 
 #buyers property chat with sellers 
 #api_bp.add_url_rule(rule='user/properties/chat', view_func=SellerPropertyChatView.as_view('user_properties_chat'), methods=['POST'])
 #api_bp.add_url_rule(rule='user/properties/chat/<property_id>/<user_id>', view_func=SellerPropertyChatView.as_view('user_property_message'), methods=['GET'])
-
 
 
 # Admin UI APIs
@@ -81,12 +78,9 @@ api_bp.add_url_rule(rule='/admin/document/flforms/move', view_func=MoveFlFormsFi
 api_bp.add_url_rule(rule='/admin/document/mnforms/move', view_func=MoveMnFormsFileView.as_view('admin_document_mnforms_move'))
 
 
-#  Buyers APIs
-#api_bp.add_url_rule(rule='/users/buyers', view_func=AllBuyersView.as_view('buyers'))
+# Buyers APIs
 #api_bp.add_url_rule(rule='/users/buyers/add', view_func=AddBuyerView.as_view('add_buyers'))
-#api_bp.add_url_rule(rule='/users/buyers/properties', view_func=BuyersPropertyListView.as_view('buyers_properties_list'))
 #api_bp.add_url_rule(rule='/users/buyer/sellers', view_func=BuyerAllSellersView.as_view('buyer_sellers'))
-#api_bp.add_url_rule(rule='/users/buyer/sellers/chat', view_func=BuyerSellersChatView.as_view('buyer_sellers_chat'), methods=['POST'])
-#api_bp.add_url_rule(rule='/users/buyer/sellers/chat/<property_id>/<user_id>', view_func=BuyerSellersChatView.as_view('buyer_seller_message'), methods=['GET'])
-#api_bp.add_url_rule(rule='/users/chat/list', view_func=ChatUsersListView.as_view('chat_users_list'))
-#
+api_bp.add_url_rule(rule='/users/buyer/sellers/chat', view_func=BuyerSellersChatView.as_view('buyer_sellers_chat'), methods=['POST'])
+api_bp.add_url_rule(rule='/users/buyer/sellers/chat/<property_id>/<user_id>', view_func=BuyerSellersChatView.as_view('buyer_seller_message'), methods=['GET'])
+api_bp.add_url_rule(rule='/users/chat/list', view_func=ChatUsersListView.as_view('chat_users_list'))

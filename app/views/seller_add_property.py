@@ -50,6 +50,10 @@ class PropertyTypeSelectionView(MethodView):
         if not user:
             return jsonify({'error': 'User not found'})
         
+        user_role = user.get('role')
+        if user_role == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 200
+        
         data = request.json
         property_address = data.get('seller_address',None)
         property_type = data.get('property_type',None)
@@ -103,7 +107,7 @@ class PropertyTypeSelectionView(MethodView):
             'phone': user['phone'],
             'user_id': user['uuid']
         }
-
+        property_data.pop('_id',None)
         transaction_result = current_app.db.transaction.insert_one({
             'property_data': property_data,
             'user_info': user_info,
@@ -128,14 +132,14 @@ class PropertyUploadImageView(MethodView):
         data = request.form
         transaction_id = data.get('transaction_id')
         images = request.files.getlist("images")
-        print(images,"DFGFG")
+        
         if not transaction_id:
             return jsonify({'error':'Missing transacion_id'})
 
         transaction_data = current_app.db.transaction.find_one({"_id": ObjectId(transaction_id)})
         if not transaction_data:
             return jsonify({'error':'Invalid Transaction'})
-
+        uploaded_images = 0
         if images:
             try:
                 image_urls = []
