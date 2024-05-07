@@ -53,14 +53,15 @@ class SellerPropertyListView(MethodView):
                     'name': user.get('first_name') + " " + user.get('last_name'),
                     'phone': user.get('phone'),
                     'email': user.get('email'),
-                    'profile': user.get('profile_pic')
+                    'profile': user.get('profile_pic'),
+                    'user_id': user['uuid']
                 }
                 property_info['owner_info'] = owner_info
                 property_list.append(property_info)
             else:
                 property_list.append(None)
 
-        return jsonify({'properties': property_list}), 200
+        return jsonify(property_list), 200
 
 
 class AllPropertyListView(MethodView):
@@ -82,7 +83,8 @@ class AllPropertyListView(MethodView):
                         'name': seller.get('first_name') + " " + seller.get('last_name'),
                         'phone': seller.get('phone'),
                         'email': seller.get('email'),
-                        'profile': seller.get('profile_pic')
+                        'profile': seller.get('profile_pic'),
+                        'user_id': seller.get('uuid')
                     }
                     prop['owner_info'] = owner_info
                 else:
@@ -176,7 +178,7 @@ class PropertyUpdateView(MethodView):
             updatable_fields = [
                 'description', 'price', 'size',
                 'name', 'status', 'address', 'state', 'city',
-                'latitude', 'longitude', 'beds', 'baths', 'kitchen', 'image',
+                'latitude', 'longitude', 'beds', 'baths', 'kitchen'
             ]
             
             for key, value in request.form.items():

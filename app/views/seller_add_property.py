@@ -107,7 +107,7 @@ class PropertyTypeSelectionView(MethodView):
             'phone': user['phone'],
             'user_id': user['uuid']
         }
-        property_data.pop('_id',None)
+        property_data.pop('_id', None)
         transaction_result = current_app.db.transaction.insert_one({
             'property_data': property_data,
             'user_info': user_info,
@@ -188,6 +188,7 @@ class SavePdfView(MethodView):
         data = request.json
         transaction_id = data.get('transaction_id')
         signature_data = data.get('signature_data')
+        logger.info(signature_data)
         if not transaction_id or not signature_data:
             return jsonify({'error':'Missing transacion_id or signature_data'})
         
@@ -223,7 +224,7 @@ class SavePdfView(MethodView):
             # Debugging: Print the page count
             print("Number of pages in the template PDF:", template_pdf.page_count)
             first_page = template_pdf[0]
-            first_page.insert_text((20, 20), f"User IP: {get_client_ip(request)}")
+            first_page.insert_text((20, 20), f"User IP: {get_client_ip()}")
             if template_pdf.page_count >= 4:
                 fifth_page = template_pdf[3]  # Adjusted page number to exist within the document's range
                 rect = fitz.Rect(430, 0, 625, 850)
@@ -246,7 +247,7 @@ class SavePdfView(MethodView):
 
             # Update the uploaded_documents collection
             current_app.db.users.update_one(
-                {'uuid': transaction.get('user_id')},
+                {'uuid': transaction.get('user_info')['user_id']},
                 {'$push': {'uploaded_documents': document_data}}
             )
             current_app.db.transaction.update_one({"_id": ObjectId(transaction_id)}, {"$set": {"signed_property_contract": doc_url}})

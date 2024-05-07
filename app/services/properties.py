@@ -50,16 +50,15 @@ def send_email(subject, message, recipient):
     return response.status_code, response.headers
 
 
-
-def get_client_ip(request: request):
+def get_client_ip():
     """
-    Get the client's IP address from the request object.
+    Get the client's IP address from the request object in Flask.
     """
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    x_forwarded_for = request.headers.get('X-Forwarded-For')
     if x_forwarded_for:
         ip = x_forwarded_for.split(',')[0]
     else:
-        ip = request.META.get('REMOTE_ADDR')
+        ip = request.remote_addr
     return ip
 
 
