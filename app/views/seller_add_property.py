@@ -139,6 +139,12 @@ class PropertyUploadImageView(MethodView):
         transaction_data = current_app.db.transaction.find_one({"_id": ObjectId(transaction_id)})
         if not transaction_data:
             return jsonify({'error':'Invalid Transaction'})
+        
+        #Check for incorrect or used transaction
+        existing_transaction = current_app.db.property_seller_transaction.find_one({"transaction_id": transaction_id, 'property_id': transaction_data['property_data']['property_id']})
+        if existing_transaction:
+            return jsonify({'error':'Invalid transaction, transaction already exist for this property'})
+        
         uploaded_images = 0
         if images:
             try:
@@ -195,6 +201,12 @@ class SavePdfView(MethodView):
         transaction = current_app.db.transaction.find_one({'_id': ObjectId(transaction_id)})
         if not transaction:
             return jsonify({'error':'Invalid Transaction'})
+        
+         
+        #Check for incorrect or used transaction
+        existing_transaction = current_app.db.property_seller_transaction.find_one({"transaction_id": transaction_id, 'property_id': transaction['property_data']['property_id']})
+        if existing_transaction:
+            return jsonify({'error':'Invalid transaction, transaction already exist for this property'})
         
         template_pdf = None
         signature_pdf = None
@@ -284,6 +296,12 @@ class CheckoutView(MethodView):
         transaction = current_app.db.transaction.find_one({'_id': ObjectId(transaction_id)})
         if not transaction:
             return jsonify({'error':'Invalid Transaction'})
+        
+         
+        #Check for incorrect or used transaction
+        existing_transaction = current_app.db.property_seller_transaction.find_one({"transaction_id": transaction_id, 'property_id': transaction['property_data']['property_id']})
+        if existing_transaction:
+            return jsonify({'error':'Invalid transaction, transaction already exist for this property'})
         
         coupon = current_app.db.coupon.find_one({'code': code})
         if coupon:

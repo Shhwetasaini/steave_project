@@ -115,9 +115,9 @@ class BuyerSellersChatView(MethodView):
         if user_role == 'realtor':
             return jsonify({'error': 'Unauthorized access'}), 200
 
-        seller = current_app.db.property_seller_transaction.find({'seller_id': user['uuid'], 'property_id': property_id})
+        seller = current_app.db.property_seller_transaction.find_one({'seller_id': user_id, 'property_id': property_id})
         
-        if not seller:
+        if seller:
             buyer_id = user['uuid']
             seller_id = user_id
         else:
@@ -185,16 +185,16 @@ class BuyerSellersChatView(MethodView):
             'key' : 'buyer_seller_messaging'
         }
 
-        seller = current_app.db.property_seller_transaction.find({'seller_id': user['uuid'], 'property_id': property_id})
+        seller = current_app.db.property_seller_transaction.find_one({'seller_id': receiver_id, 'property_id': property_id})
         
-        if not seller:
+        if seller:
             buyer_id = user['uuid']
             seller_id = receiver_id
-            topic_email = current_app.db.users.find_one({'uuid': seller_id}, {'email':1, '_id': 0})['email']
+            topic_email = current_app.db.users.find_one({'uuid': seller_id}, {'email':1, '_id': 0})['email'] + f'/{property_id}/{buyer_id}'
         else:
             buyer_id = receiver_id
             seller_id = user['uuid']
-            topic_email = user['email']
+            topic_email = user['email'] + f'/{property_id}/{buyer_id}'
         
         chat_message['buyer_id'] = buyer_id
         chat_message['seller_id'] = seller_id  
@@ -273,19 +273,30 @@ class ChatUsersListView(MethodView):
         if len(receivers) != 0:
             for receiver in receivers:
                 seller = current_app.db.users.find_one({'uuid': receiver['seller_id']}, {'email': 1, 'first_name': 1, 'profile_pic': 1, '_id': 0})
+                property_address = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, '_id': 0})
+                if property_address:
+                    receiver['property_address'] = property_address['address']
+                else:
+                    receiver['property_address'] = None
                 receiver['owner_email'] = seller.get('email') if seller else None
                 receiver['first_name'] = seller.get('first_name') if seller else None
                 receiver['profile_pic'] = seller.get('profile_pic') if seller else None
-        
+                receiver['user_id'] = receiver.pop('seller_id')
             return jsonify(receivers), 200
         else: 
             seller_id = user['uuid']
             receivers = list(current_app.db.buyer_seller_messaging.find({'seller_id': seller_id}, {'property_id': 1, 'buyer_id': 1, '_id': 0}))
             for receiver in receivers:
                 buyer = current_app.db.users.find_one({'uuid': receiver['buyer_id']}, {'email': 1,'first_name': 1,  'profile_pic': 1, '_id': 0})
+                property_address = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, '_id': 0})
+                if property_address:
+                    receiver['property_address'] = property_address['address']
+                else:
+                    receiver['property_address'] = None
                 receiver['email'] = buyer.get('email') if buyer else None
                 receiver['first_name'] = buyer.get('first_name') if buyer else None
                 receiver['profile_pic'] = buyer.get('profile_pic') if buyer else None
+                receiver['user_id'] = receiver.pop('buyer_id')
             return jsonify(receivers), 200
 
 

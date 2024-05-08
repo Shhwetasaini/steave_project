@@ -20,7 +20,7 @@ mqtt_client.username_pw_set(Config.MQTT_USERNAME, Config.MQTT_PASSWD)
 
 def create_app(config_name):   
     app = Flask(__name__,)
-    CORS(app)
+    CORS(app, supports_credentials=True)
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
 
