@@ -46,11 +46,9 @@ api_bp.add_url_rule(rule='user/properties/add/checkout', view_func=CheckoutView.
 
 api_bp.add_url_rule(rule='user/properties/list', view_func=SellerPropertyListView.as_view('user_properties_list'))   #individual seller properties
 api_bp.add_url_rule(rule='user/properties', view_func=AllPropertyListView.as_view('user_properties'))
-#api_bp.add_url_rule(rule='user/properties/buyers', view_func=SellerBuyersListView.as_view('user_properties_buyers'))
-#api_bp.add_url_rule(rule='user/properties/buyers/<string:property_id>', view_func=SellerSinglePropertyBuyersListView.as_view('user_singleproperty_buyers'))
 api_bp.add_url_rule(rule='user/properties/<string:property_id>', view_func=PropertyUpdateView.as_view('user_properties_update'))
 api_bp.add_url_rule(rule='user/properties/image/remove', view_func=PropertyImageDeleteView.as_view('user_properties_image_remove'))
-
+api_bp.add_url_rule(rule='user/properties/add/external', view_func=ExternalPropertyAddView.as_view('user_properties_add_external'))
 #buyers property chat with sellers 
 #api_bp.add_url_rule(rule='user/properties/chat', view_func=SellerPropertyChatView.as_view('user_properties_chat'), methods=['POST'])
 #api_bp.add_url_rule(rule='user/properties/chat/<property_id>/<user_id>', view_func=SellerPropertyChatView.as_view('user_property_message'), methods=['GET'])

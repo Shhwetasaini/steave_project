@@ -96,66 +96,31 @@ class AllPropertyListView(MethodView):
         return jsonify(property_list), 200
 
 
-class SellerBuyersListView(MethodView):
-    decorators = [custom_jwt_required()]
-
-    def get(self):
+class ExternalPropertyAddView(MethodView):
+    def post(self):
         log_request(request)
-        current_user = get_jwt_identity()
+        data = request.json
+        print(data,"DATA---------------")
+        property_insert_result = current_app.db.properties.insert_one(data)
+        inserted_property_id = str(property_insert_result.inserted_id)
+        user_info = {
+            'first_name': "Casana",
+            'last_name': "customer-support",
+            'email': "Casana@HeyCasana.com",
+            'phone': None,
+            'user_id': None
+        }
+        # Use the inserted property ID in the transaction
+        data.pop('_id')
+        transaction_result = current_app.db.transaction.insert_one({
+            "property_id" :inserted_property_id,
+            'property_data': data,  # Use the inserted property ID
+            'user_info': user_info,
+            'amount': "NA",
+            'signed_property_contract': None
+        })
+        return jsonify({'message': 'data saved successfully.', "transaction_id": str(transaction_result.inserted_id)})
 
-        try:
-            validate_email(current_user)
-            user = current_app.db.users.find_one({'email': current_user})
-        except EmailNotValidError:
-            user = current_app.db.users.find_one({'uuid': current_user})
-        
-        if not user:
-            return jsonify({'error': 'User not found'}), 200
-        
-        user_role = user.get('role')
-        if not user_role or user_role != 'seller':
-            return jsonify({'error': 'Unauthorized access'}), 200
-        
-        # Retrieve properties listed by the seller
-        properties = current_app.db.properties.find({'seller_id': user['uuid']})
-        
-        # Extract buyers from properties
-        buyers = set()
-        for property in properties:
-            buyers.update(property.get('buyers', []))
-        
-        return jsonify(list(buyers)), 200
-    
-
-class SellerSinglePropertyBuyersListView(MethodView):
-    decorators = [custom_jwt_required()]
-
-    def get(self, property_id):
-        log_request(request)
-        current_user = get_jwt_identity()
-
-        try:
-            validate_email(current_user)
-            user = current_app.db.users.find_one({'email': current_user})
-        except EmailNotValidError:
-            user = current_app.db.users.find_one({'uuid': current_user})
-        
-        if not user:
-            return jsonify({'error': 'User not found'}), 200
-        
-        user_role = user.get('role')
-        if not user_role or user_role != 'seller':
-            return jsonify({'error': 'Unauthorized access'}), 200
-        
-        # Check if the property exists and belongs to the seller
-        property_doc = current_app.db.properties.find_one({'_id': ObjectId(property_id), 'seller_id': user['uuid']})
-        if not property_doc:
-            return jsonify({'error': 'Property not found or does not belong to the seller'}), 200
-        
-        # Retrieve the buyers associated with the property
-        buyers = property_doc.get('buyers', [])
-        
-        return jsonify(buyers), 200
 
 
 class PropertyUpdateView(MethodView):

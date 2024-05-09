@@ -286,7 +286,7 @@ class CheckoutView(MethodView):
         transaction_id = data.get('transaction_id')
         token = data.get('token')
         code = data.get('code')
-        payment_amount = int(data.get('payment_amount', 99700)  or 0)
+        payment_amount = int(data.get('payment_amount', 997)  or 0)
         #if payment_amount != 49700  or payment_amount != 99700:
         #    return jsonify({'error':'Invalid payment amount'})
         
@@ -308,9 +308,9 @@ class CheckoutView(MethodView):
             if is_valid(coupon):
                 amount = int(coupon['discount_amount'] * 100)
             else:
-                amount = int(payment_amount)  # Use the payment_amount from the request
+                amount = int(payment_amount) * 100  # Use the payment_amount from the request
         else:
-            amount = int(payment_amount)  # Use the payment_amount from the request
+            amount = int(payment_amount) * 100  # Use the payment_amount from the request
 
         logger.info(f"Token received: {token}, Amount: {amount}")
 

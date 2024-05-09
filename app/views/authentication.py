@@ -275,7 +275,7 @@ class UpdateUsersView(MethodView):
                 os.makedirs(user_profile_dir, exist_ok=True)
                 
                 # Delete old profile picture if it exists
-                if 'profile_pic' in user:
+                if user['profile_pic'] is not None:
                     old_profile_pic_path = os.path.join(user_profile_dir, user['profile_pic'].split('/')[-1])
                     if os.path.exists(old_profile_pic_path):
                         os.remove(old_profile_pic_path)
