@@ -4,6 +4,7 @@ import re
 import json
 from datetime import datetime
 from bson import ObjectId
+import logging
 
 from email_validator import validate_email, EmailNotValidError
 
@@ -99,27 +100,34 @@ class AllPropertyListView(MethodView):
 class ExternalPropertyAddView(MethodView):
     def post(self):
         log_request(request)
-        data = request.json
-        print(data,"DATA---------------")
-        property_insert_result = current_app.db.properties.insert_one(data)
-        inserted_property_id = str(property_insert_result.inserted_id)
-        user_info = {
-            'first_name': "Casana",
-            'last_name': "customer-support",
-            'email': "Casana@HeyCasana.com",
-            'phone': None,
-            'user_id': None
-        }
-        # Use the inserted property ID in the transaction
-        data.pop('_id')
-        transaction_result = current_app.db.transaction.insert_one({
-            "property_id" :inserted_property_id,
-            'property_data': data,  # Use the inserted property ID
-            'user_info': user_info,
-            'amount': "NA",
-            'signed_property_contract': None
-        })
-        return jsonify({'message': 'data saved successfully.', "transaction_id": str(transaction_result.inserted_id)})
+        try:
+            data = request.json
+            print(data,"DATA---------------")
+            property_insert_result = current_app.db.properties.insert_one(data)
+            inserted_property_id = str(property_insert_result.inserted_id)
+            data['property_id'] =  inserted_property_id
+            # Use the inserted property ID in the transaction
+            data.pop('_id', None)
+            transaction_result = current_app.db.transaction.insert_one({
+                'property_data': data,
+                'amount': "NA",
+                'signed_property_contract': None
+            })
+
+            lookup_data = {
+                "transaction_id": str(transaction_result.inserted_id),
+                "property_id": inserted_property_id, 
+                "seller_id": "customer_support",
+                "realtors": []  
+            }
+
+            # Insert lookup data into the lookup table
+            current_app.db.property_seller_transaction.insert_one(lookup_data)
+            
+            return jsonify({'message': 'Property added successfully.'})
+        except Exception as e:
+            logging.info("Externalproperty add error",  str(e))
+            return jsonify({'error': str(e)})
 
 
 

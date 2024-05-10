@@ -287,8 +287,9 @@ class CheckoutView(MethodView):
         token = data.get('token')
         code = data.get('code')
         payment_amount = int(data.get('payment_amount', 997)  or 0)
-        #if payment_amount != 49700  or payment_amount != 99700:
-        #    return jsonify({'error':'Invalid payment amount'})
+
+        if payment_amount != 497 or payment_amount != 997:
+            return jsonify({'error':'Invalid payment amount'})
         
         if not transaction_id or not token:
             return jsonify({'error':'Missing transacion_id or card token'})
