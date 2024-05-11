@@ -11,7 +11,7 @@ from flask import current_app
 from flask_jwt_extended import create_access_token, get_jwt_identity
 from werkzeug.utils import secure_filename
 
-from app.services.authentication import custom_jwt_required
+from app.services.authentication import custom_jwt_required , log_action
 from app.services.admin import log_request
 
 
@@ -21,6 +21,8 @@ class DashboardView(MethodView):
     def get(self):
         log_request(request)
         current_user = get_jwt_identity()
+        user = current_app.db.users.find_one({'email': current_user})
+        log_action(user['uuid'], user['role'], "viewed-dashboard", None)
         return jsonify({'message':'success'}), 200
 
 
@@ -88,6 +90,7 @@ class AdminRegisterUserView(MethodView):
         existing_user = current_app.db.users.find_one(query)
         if not existing_user:
             current_app.db.users.insert_one(new_user)
+            log_action(new_user['uuid'], new_user['role'], new_user['email'], "registration", new_user)  
             return jsonify({'message': 'User registered successfully'}), 200
         else:
             return jsonify({'error': 'User already exists with this email'}), 400
@@ -98,6 +101,8 @@ class AllUserView(MethodView):
     def get(self):
         log_request(request)
         current_user = get_jwt_identity()
+        user = current_app.db.users.find_one({'email': current_user})
+        log_action(user['uuid'], user['role'], "viewed-users-list", None)
         users = list(current_app.db.users.find({}, {'_id': 0, 'otp': 0}))
         return jsonify(users), 200
         
@@ -109,7 +114,8 @@ class AddUserView(MethodView):
         log_request(request)
 
         current_user = get_jwt_identity()
-
+        logged_in_user = current_app.db.users.find_one({'email': current_user})
+        
         # Determine content type and parse data accordingly
         if request.content_type.startswith('multipart/form-data'):
             data = request.form
@@ -170,6 +176,8 @@ class AddUserView(MethodView):
         existing_user = current_app.db.users.find_one(query)
         if not existing_user:
             current_app.db.users.insert_one(new_user)
+            
+            log_action(logged_in_user['uuid'], logged_in_user['role'], "added-user", new_user)
             return jsonify({'message': 'User registered successfully'}), 200
         else:
             return jsonify({'error': 'User already exists with this email'}), 400
@@ -200,6 +208,7 @@ class AdminUserLoginView(MethodView):
             encrpted_password = hashlib.sha256(password.encode("utf-8")).hexdigest()
             if encrpted_password == user['password']:
                 access_token = create_access_token(identity=email)
+                log_action(user['uuid'], user['role'], "login", data)
                 return jsonify({"message":"User Logged in successfully!", "access_token":access_token}), 200
             else:
                 return jsonify({'error': 'Email or Password is incorrect!'}), 400
@@ -211,6 +220,8 @@ class EditUsersView(MethodView):
     def put(self):
         log_request(request)
         current_user = get_jwt_identity()
+        
+        logged_in_user = current_app.db.users.find_one({'email': current_user})
         update_doc = {}
         
         data = request.form
@@ -260,6 +271,7 @@ class EditUsersView(MethodView):
             return_document=True 
         )
         if updated_user:
+            log_action(logged_in_user['uuid'], logged_in_user['role'], "updated-user", update_doc)
             return jsonify({'message':"User updated Successfully!"}), 200
         else:
             return jsonify({'error': 'User not found or no fields to update!'}), 200 
@@ -271,14 +283,14 @@ class DeleteUserView(MethodView):
     def delete(self):
         log_request(request)
         current_user = get_jwt_identity()
+        user = current_app.db.users.find_one({'email': current_user})
         
         result = current_app.db.users.delete_one({'email': request.json.get('email')})
         if result.deleted_count == 1:
+            log_action(user['uuid'], user['role'], user['email'], "deleted-user", {'email': request.json.get('email')})
             return jsonify({'message': 'User deleted successfully'}), 200
         else:
             return jsonify({'error': 'User not found'}), 404
-    
-         
 
 
 class GetMediaView(MethodView):
@@ -286,6 +298,7 @@ class GetMediaView(MethodView):
     def get(self):
         log_request(request)
         current_user = get_jwt_identity()
+        logged_in_user = current_app.db.users.find_one({'email': current_user})
         
         all_media = list(current_app.db.media.find({}, {'_id': 0}))
         for media in all_media:
@@ -294,6 +307,7 @@ class GetMediaView(MethodView):
                 media['email'] = user['email']
             except TypeError:
                 continue
+        log_action(logged_in_user['uuid'], logged_in_user['role'], "viewed-media", None)
         return jsonify(all_media), 200
 
 
@@ -302,7 +316,8 @@ class ActionLogsView(MethodView):
     def get(self):
         log_request(request)
         current_user = get_jwt_identity()
-        
+        logged_in_user = current_app.db.users.find_one({'email': current_user})
+
         all_logs = list(current_app.db.audit.find({}, {'_id': 0}))
         for log in all_logs:
             user = current_app.db.users.find_one({'uuid':log['user_id']})
@@ -310,4 +325,5 @@ class ActionLogsView(MethodView):
                 log['email'] = user['email']
             except TypeError:
                 continue
+        log_action(logged_in_user['uuid'], logged_in_user['role'], "viewed-actions", None)
         return jsonify(all_logs), 200

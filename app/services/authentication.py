@@ -7,6 +7,7 @@ from flask import jsonify
 from flask_jwt_extended import verify_jwt_in_request
 from jwt.exceptions import InvalidTokenError, DecodeError
 
+from datetime import datetime
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail as SendGridMail
 
@@ -77,3 +78,21 @@ def send_otp_via_email(email, otp, subject):
         print(response.status_code)
     except Exception as e:
         print(str(e))
+
+
+
+def log_action(user_id, user_role, action, payload=None):
+   # Check if the user exists in the notifications collection
+    existing_user_log = current_app.db.audit.find_one({"user_id": user_id})
+
+    # Construct notification document
+    log = {"action" : action, "timestamp": datetime.now(), 'payload':payload}
+
+    if existing_user_log:
+      
+        current_app.db.audit.update_one(
+            {"user_id": user_id},
+            {"$push": {"logs": log}} 
+        )
+    else:
+        current_app.db.audit.insert_one({"user_id": user_id, "user_role": user_role, "logs": [log]}) 

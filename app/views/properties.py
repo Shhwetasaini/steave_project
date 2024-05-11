@@ -14,8 +14,8 @@ from flask_jwt_extended import get_jwt_identity
 from werkzeug.utils import secure_filename
 
 from app.services.admin import log_request
-from app.services.authentication import custom_jwt_required
-from app.views.notifications import store_notification
+from app.services.authentication import custom_jwt_required, log_action
+
 from app.services.properties import validate_address
 
 
@@ -61,7 +61,8 @@ class SellerPropertyListView(MethodView):
                 property_list.append(property_info)
             else:
                 property_list.append(None)
-
+      
+        log_action(user['uuid'],user['role'], "viewed-properties", None)
         return jsonify(property_list), 200
 
 
@@ -70,6 +71,17 @@ class AllPropertyListView(MethodView):
 
     def get(self):
         log_request(request)
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 200
+        
         properties = current_app.db.properties.find()
 
         property_list = []
@@ -94,6 +106,8 @@ class AllPropertyListView(MethodView):
                 property_list.append(prop)
             else:
                 continue  # Invalid/Incomplete transaction properties
+        
+        log_action(user['uuid'],user['role'], "viewed-allproperties", None)     
         return jsonify(property_list), 200
 
 
@@ -123,12 +137,10 @@ class ExternalPropertyAddView(MethodView):
 
             # Insert lookup data into the lookup table
             current_app.db.property_seller_transaction.insert_one(lookup_data)
-            
             return jsonify({'message': 'Property added successfully.'})
         except Exception as e:
             logging.info("Externalproperty add error",  str(e))
             return jsonify({'error': str(e)})
-
 
 
 class PropertyUpdateView(MethodView):
@@ -213,12 +225,9 @@ class PropertyUpdateView(MethodView):
                     {'_id': ObjectId(property_id)},
                     {'$set': {'images': property_data['images']}}
                 )
-                store_notification(
-                    user_id=user['uuid'],
-                    title="Update Property",
-                    message="image added successfully",
-                    type="property"
-                )
+            
+            property_data['property_id'] = property_id
+            log_action(user['uuid'], user['role'], "updated-property", property_data)
             return jsonify({'message': 'Property information updated successfully'}), 200
         else:
             return jsonify({'error': 'User not found'}), 200
@@ -251,16 +260,12 @@ class PropertyImageDeleteView(MethodView):
             property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
             property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
             
-
-
             if property_data is None or property_seller_data is None:
                 return jsonify({'error': 'Property does not Exists or you are not allowed to delete image to this property'}), 200
-
 
             if not property_data:
                 return jsonify({'error': 'Property not found'}), 200
             
-
             file_name = os.path.basename(image_url)
            
             # Delete the file from the server
@@ -287,15 +292,9 @@ class PropertyImageDeleteView(MethodView):
 
             if result.modified_count == 0:
                 return jsonify({'error': 'Failed to delete the image'}), 200
-
-       
-            store_notification(
-                user_id=user['uuid'], 
-                title="Update Property",
-                message="image deleted successfully",
-                type="property"
-            )
-
+            
+           
+            log_action(user['uuid'], user['role'],"deleted-property-image", data)
             return jsonify({'message': 'Image deleted successfully'}), 200
         else:
             return jsonify({'error': 'User not found'}), 200

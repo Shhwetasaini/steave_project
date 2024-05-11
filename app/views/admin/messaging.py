@@ -8,7 +8,7 @@ from flask import jsonify, request
 from flask import current_app
 from flask_jwt_extended import get_jwt_identity
 
-from app.services.authentication import custom_jwt_required
+from app.services.authentication import custom_jwt_required, log_action
 from app.services.admin import log_request
 
 
@@ -17,6 +17,7 @@ class ChatView(MethodView):
     def get(self):
         log_request(request)
         current_user = get_jwt_identity() 
+        user = current_app.db.users.find_one({'email': current_user})
         
         users_cursor = current_app.db.users.find({}, {'_id': False, 'password': False})
         users = list(users_cursor)
@@ -56,7 +57,7 @@ class ChatView(MethodView):
             else:
                 user["unseen_msg"] = None
                 user["latest_chat"] = None 
-        
+        log_action(user['uuid'], user['role'], "viewed-chats", None)
         return jsonify(users), 200
 
 
@@ -65,7 +66,8 @@ class UpdateChatStatus(MethodView):
     def post(self):
         log_request(request)
         current_user = get_jwt_identity() 
-       
+        logged_in_user = current_app.db.users.find_one({'email': current_user})
+        
         data = request.json
         email = data.get('email')
         user = current_app.db.users.find_one({'email': email})
@@ -74,6 +76,7 @@ class UpdateChatStatus(MethodView):
             {'$set': {'messages.$[elem].is_seen': True}},
             array_filters=[{'elem.is_response': False}]
         )
+        log_action(logged_in_user['uuid'],logged_in_user['role'],"viewed-message", data)
         return jsonify({"message":"successfully updated!"}), 200
 
 
@@ -83,6 +86,7 @@ class SaveAdminResponseView(MethodView):
         from app import mqtt_client
         log_request(request)
         current_user = get_jwt_identity()
+        logged_in_user = current_app.db.users.find_one({'email': current_user})
 
         data = request.json 
         message_id = data.get('message_id')
@@ -104,5 +108,6 @@ class SaveAdminResponseView(MethodView):
         )
 
         mqtt_client.unsubscribe(mqtt_topic)
-
+        
+        log_action(logged_in_user['uuid'],logged_in_user['role'], "responded-chat", data)
         return jsonify({"message": "Response received and published successfully"}), 200

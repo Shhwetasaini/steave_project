@@ -89,4 +89,4 @@ def update_files_in_documents_db():
                                         'type': forms_type
                                     }
                                     current_app.db.documents.insert_one(document_data)
-
+                                    return document_data
