@@ -58,15 +58,13 @@ class ReceiveMediaView(MethodView):
                     {'$push': {'user_media': {'$each': uploaded_media}}},
                     upsert=True
                 )
-                log_action(user['uuid'],user['role'],user['email'],"upload-media",uploaded_media)
-                
-
         elif request.is_json:
             # Handle JSON content if needed. This block is placeholder for future expansion.
             pass
         else:
             return jsonify({"error": "Unsupported Content Type"}), 200
 
+        log_action(user['uuid'], user['role'], "uploaded-media", uploaded_media)
         return jsonify({"message": "File successfully received"}), 200
 
 
@@ -88,7 +86,7 @@ class SendMediaView(MethodView):
         if not all_media:
             return jsonify([]), 200
         
-        log_action(user['uuid'],user['role'],user['email'],"get-media",None)      
+        log_action(user['uuid'], user['role'], "viewed-media",None)      
         return jsonify(all_media.get('user_media')), 200
 
 
@@ -128,9 +126,7 @@ class DeleteMediaView(MethodView):
             {'$pull': {'user_media': {'file': file_url}}},
             upsert=True
         )
-        log_action(user['uuid'],user['role'],user['email'],"deleted-media",{'file': file_url})
-        
-
+        log_action(user['uuid'], user['role'], "deleted-media", {'file': file_url})
         return jsonify({'message': 'File deleted successfully'}), 200
     
 
@@ -187,21 +183,15 @@ class DownloadDocView(MethodView):
                 query,
                 {'$set': {'downloaded_documents.$.is_signed': document_data['is_signed']}}
             )
-         
-            log_action(user['uuid'],user['role'],user['email'],"download-media",{'file': name})
-        
-
+            log_action(user['uuid'], user['role'], "downloaded-document", document_data)
             return jsonify({"message": "Document already exists for the user. Updated."}), 200
         else:
             # Add the new document to the user's downloaded_documents field
-            
-            
-            
             current_app.db.users.update_one(
                 {'uuid': user['uuid']},
                 {'$push': {'downloaded_documents': document_data}}
             )
-            log_action(str(user['_id']),"download-media",{'file': name})
+            log_action(user['uuid'], user['role'], "downloaded-document", document_data)
             return jsonify({"message": "Document successfully added to user's documents"}), 200
 
    
@@ -209,7 +199,6 @@ class UploadDocView(MethodView):
     decorators = [custom_jwt_required()]
 
     def put(self):
-        print(request.content_type)
         log_request(request)
         current_user = get_jwt_identity()
 
@@ -246,8 +235,8 @@ class UploadDocView(MethodView):
                 {'$push': {'uploaded_documents': document_data}}
             )
          
-            log_action(str(user['_id']),"upload-media",document_data)
-            return jsonify({"message": "File successfully uploaded!", "document_data": document_data}), 200
+            log_action(user['uuid'], user['uuid'], "uploaded-document", document_data)
+            return jsonify({"message": "File successfully uploaded!", "uploaded-document": document_data}), 200
         else:
             return jsonify({"error": "File is missing or invalid filename."}), 400
 
@@ -257,6 +246,14 @@ class AllDocsView(MethodView):
 
     def get(self):
         log_request(request)
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
         flforms_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'FL_Forms')
         mnforms_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms')
 
@@ -291,6 +288,7 @@ class AllDocsView(MethodView):
 
         # Retrieve data from MongoDB and return as JSON response
         documents = list(current_app.db.documents.find({}, {"_id": 0}))
+        log_action(user['uuid'], user['uuid'], "viwed-all-document", None)
         return jsonify(documents), 200
 
 
@@ -306,7 +304,7 @@ class UserDownloadedDocsView(MethodView):
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user}, {'downloaded_documents': 1, '_id': 0})
         if user:
-            log_action(str(user['_id']),"user-download-media",None)
+            log_action(user['uuid'], user['role'], "viewed-downloaded-docs", None)
             return jsonify(user['downloaded_documents']), 200
         else:
             return jsonify({'error': 'User not found'}), 200
@@ -324,7 +322,7 @@ class UserUploadedDocsView(MethodView):
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user}, {'uploaded_documents': 1, '_id': 0})
         if user:
-            log_action(str(user['_id']),"upload-media",None)
+            log_action(user['uuid'], user['role'], "viewed-downloaded-docs", None)
             return jsonify(user['uploaded_documents']), 200
         else:
             return jsonify({'error': 'User not found'}), 200

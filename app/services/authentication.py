@@ -81,20 +81,18 @@ def send_otp_via_email(email, otp, subject):
 
 
 
-def log_action(user_id,user_role,user_email, action, payload=None):
+def log_action(user_id, user_role, action, payload=None):
    # Check if the user exists in the notifications collection
     existing_user_log = current_app.db.audit.find_one({"user_id": user_id})
 
     # Construct notification document
-    log = {"user_role": user_role, "user_email":user_email ,"action" : action, "timestamp": datetime.now(), 'payload':payload}
+    log = {"action" : action, "timestamp": datetime.now(), 'payload':payload}
 
     if existing_user_log:
       
         current_app.db.audit.update_one(
             {"user_id": user_id},
-            {"$push": {"log": log}},
-            
+            {"$push": {"logs": log}} 
         )
     else:
-        # User does not exist, create a new document
-        current_app.db.audit.insert_one({"user_id": user_id, "log": [log]}) 
+        current_app.db.audit.insert_one({"user_id": user_id, "user_role": user_role, "logs": [log]}) 

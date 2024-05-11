@@ -1,14 +1,13 @@
 from flask import Blueprint
 from app.views.authentication import *
 from app.views.messaging import *
-
 from app.views.seller_add_property import *
 from app.views.media import *
 from app.views.properties import *
 from app.views.admin.documents import *
 from app.views.admin.messaging import *
 from app.views.admin.users  import *
-from app.views.buyers.properties import *
+
 
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -49,10 +48,6 @@ api_bp.add_url_rule(rule='user/properties/<string:property_id>', view_func=Prope
 api_bp.add_url_rule(rule='user/properties/image/remove', view_func=PropertyImageDeleteView.as_view('user_properties_image_remove'))
 api_bp.add_url_rule(rule='user/properties/add/external', view_func=ExternalPropertyAddView.as_view('user_properties_add_external'))
 
-#buyers property chat with sellers 
-#api_bp.add_url_rule(rule='user/properties/chat', view_func=SellerPropertyChatView.as_view('user_properties_chat'), methods=['POST'])
-#api_bp.add_url_rule(rule='user/properties/chat/<property_id>/<user_id>', view_func=SellerPropertyChatView.as_view('user_property_message'), methods=['GET'])
-
 
 # Admin UI APIs
 api_bp.add_url_rule(rule='/admin/dashboard', view_func=DashboardView.as_view('admin_dashboard'))
@@ -80,8 +75,6 @@ api_bp.add_url_rule(rule='/admin/document/mnforms/move', view_func=MoveMnFormsFi
 api_bp.add_url_rule(rule='/admin/user/actions', view_func=ActionLogsView.as_view('admin_user_action'))
 
 # Buyers APIs
-#api_bp.add_url_rule(rule='/users/buyers/add', view_func=AddBuyerView.as_view('add_buyers'))
-#api_bp.add_url_rule(rule='/users/buyer/sellers', view_func=BuyerAllSellersView.as_view('buyer_sellers'))
 api_bp.add_url_rule(rule='/users/buyer/sellers/chat', view_func=BuyerSellersChatView.as_view('buyer_sellers_chat'), methods=['POST'])
 api_bp.add_url_rule(rule='/users/buyer/sellers/chat/<property_id>/<user_id>', view_func=BuyerSellersChatView.as_view('buyer_seller_message'), methods=['GET'])
 api_bp.add_url_rule(rule='/users/chat/list', view_func=ChatUsersListView.as_view('chat_users_list'))

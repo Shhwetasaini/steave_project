@@ -18,7 +18,6 @@ class SaveUserMessageView(MethodView):
 
     def post(self):
         from app import mqtt_client
-
         log_request(request)
 
         data = request.json if request.is_json else request.form
@@ -68,6 +67,14 @@ class SaveUserMessageView(MethodView):
         #)
 
         mqtt_client.unsubscribe(mqtt_topic)
+        data = {
+            'user_id': user['uuid'], 
+            'message_id': user['uuid'], 
+            'message': message, 
+            'is_response':False, 
+            'is_seen': False
+        }
+        log_action(user['uuid'], user['role'], "customer_support-send_message", data)
         return jsonify({"message": "Message received and published successfully"}), 200
 
 
@@ -89,6 +96,7 @@ class CheckResponseView(MethodView):
 
         if message_document:
             response = message_document['messages']   #[message['message'] for message in messages]
+            log_action(user['uuid'], user['role'], "viewed-customer_support-chat", None)
             return jsonify(response), 200
         else:
             return jsonify({"response": "No response found!"}), 200
@@ -132,9 +140,10 @@ class BuyerSellersChatView(MethodView):
 
         if not messages:
             return jsonify({'error': 'No messages found'}), 200
-        payload ={"property_id":property_id,"chat_user_id":user_id}
         
-        log_action(user['uuid'],user['role'],user['email'],"buy-seller-chat",payload)
+        payload ={"property_id":property_id, "receiver_id":user_id}
+        
+        log_action(user['uuid'], user['role'], "viewed-buyer-seller-chat", payload)
         return jsonify(messages['message_content']), 200
     
 
@@ -246,7 +255,7 @@ class BuyerSellersChatView(MethodView):
         
         mqtt_client.unsubscribe(mqtt_topic)
         
-        log_action(user['uuid'],user['role'],user['email'],"buy-seller-chat",data)
+        log_action(user['uuid'], user['role'], "buyer_seller_chat-send_message", chat_message)
         return jsonify({'message': 'Message sent successfully'}), 200
 
 
@@ -270,7 +279,6 @@ class ChatUsersListView(MethodView):
         if user_role == 'realtor':
             return jsonify({'error': 'Unauthorized access'}), 200
 
-        
         receivers = list(current_app.db.buyer_seller_messaging.find({'buyer_id': user['uuid']}, {'property_id': 1, 'seller_id': 1, '_id': 0}))
         if len(receivers) != 0:
             for receiver in receivers:
@@ -285,7 +293,7 @@ class ChatUsersListView(MethodView):
                 receiver['profile_pic'] = seller.get('profile_pic') if seller else None
                 receiver['user_id'] = receiver.pop('seller_id')
                
-                log_action(user['uuid'],user['role'],user['email'],"buy-seller-chat",None)
+            log_action(user['uuid'], user['role'], "viwed-chat_users", None)
             return jsonify(receivers), 200
         else: 
             seller_id = user['uuid']
@@ -301,128 +309,6 @@ class ChatUsersListView(MethodView):
                 receiver['first_name'] = buyer.get('first_name') if buyer else None
                 receiver['profile_pic'] = buyer.get('profile_pic') if buyer else None
                 receiver['user_id'] = receiver.pop('buyer_id')
-                log_action(user['uuid'],user['role'],user['email'],"buy-seller-chat",None)
-               
+            
+            log_action(user['uuid'], user['role'], "viwed-chat_users", None)    
             return jsonify(receivers), 200
-
-
-
-class SellerPropertyChatView(MethodView):
-    decorators = [custom_jwt_required()]
-
-    def get(self, property_id, user_id):
-        log_request(request)
-        current_user = get_jwt_identity()
-
-        try:
-            validate_email(current_user)
-            user = current_app.db.users.find_one({'email': current_user})
-        except EmailNotValidError:
-            user = current_app.db.users.find_one({'uuid': current_user})
-        
-        if not user:
-            return jsonify({'error': 'User not found'}), 200
-
-        user_role = user.get('role')
-        if user_role == 'buyer':
-            buyer_id = user['uuid']
-            seller_id = user_id
-
-            authorized = current_app.db.properties.find_one({
-                '_id': ObjectId(property_id),
-                'buyers': buyer_id, 
-                'seller_id': seller_id   
-            })
-        elif user_role == 'seller':
-            seller_id = user['uuid']
-            buyer_id = user_id
-
-            authorized = current_app.db.properties.find_one({
-                '_id': ObjectId(property_id),
-                'seller_id': seller_id,
-                'buyers': {'$all': [buyer_id]}
-            })
-        else:
-            return jsonify({'error': 'Unauthorized access'}), 200
-        
-        if not authorized:
-            return jsonify({'error': 'Unauthorized access to chat messages for this property'}), 200
-
-        
-        messages = current_app.db.seller_property_messaging.find({
-            'property_id': property_id,
-            'seller_id': seller_id,
-            'buyer_id': buyer_id
-        })
-
-
-        if not messages:
-            return jsonify({'error': 'No messages found'}), 200
-        
-        return jsonify(messages['message_content']), 200
-
-    def post(self):
-        from app import mqtt_client
-        log_request(request)
-        current_user = get_jwt_identity()
-
-        try:
-            validate_email(current_user)
-            user = current_app.db.users.find_one({'email': current_user})
-        except EmailNotValidError:
-            user = current_app.db.users.find_one({'uuid': current_user})
-
-        if not user:
-            return jsonify({'error': 'User not found'}), 200
-        
-        data = request.json
-        receiver_id = data.get('receiver_id')
-        message_content = data.get('message')
-        property_id = data.get('property_id')
-
-        if not receiver_id or not message_content or not property_id:
-            return jsonify({"error": "Missing receiver_id or message or property"}), 200
-        
-        # Construct chat message document
-        chat_message = {
-            'property_id': property_id,
-            'message_content': [
-                {
-                    'msg_id': user['uuid'],
-                    'message': message_content
-                }
-            ],
-            'key' : 'seller_property_messaging'
-        }
-
-        user_role = user.get('role')
-
-        if user_role == 'buyer':
-            buyer_id = user['uuid']
-            seller_id = receiver_id
-        else:
-            buyer_id = receiver_id
-            seller_id = user['uuid']
-
-        # Check if the property exists and belongs to the seller
-        property_doc = current_app.db.properties.find_one({'_id': ObjectId(property_id), 'seller_id': seller_id})
-        if not property_doc:
-            return jsonify({'error': 'Property not found or does not belong to the seller'}), 200
-        if buyer_id not in property_doc['buyers']:
-            return jsonify({'error': 'Buyer not found or does not belong to the seller'}), 200
-        
-        chat_message['buyer_id'] = buyer_id
-        chat_message['seller_id'] = seller_id  
-
-        mqtt_topic = f"seller_property_chat/{user['email']}"
-        mqtt_client.subscribe(mqtt_topic)
-
-        # Publish the message to the MQTT topic
-        mqtt_client.publish(
-            topic=mqtt_topic, 
-            payload=json.dumps(chat_message)
-        )
-        
-        mqtt_client.unsubscribe(mqtt_topic)
-    
-        return jsonify({'message': 'Message sent successfully'}), 200

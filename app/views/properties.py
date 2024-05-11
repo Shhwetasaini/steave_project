@@ -62,7 +62,7 @@ class SellerPropertyListView(MethodView):
             else:
                 property_list.append(None)
       
-        log_action(user['uuid'],user['role'],user['email'],"seller-property-list",None)
+        log_action(user['uuid'],user['role'], "viewed-properties", None)
         return jsonify(property_list), 200
 
 
@@ -107,7 +107,7 @@ class AllPropertyListView(MethodView):
             else:
                 continue  # Invalid/Incomplete transaction properties
         
-        log_action(user['uuid'],user['role'],user['email'],"property-list",None)     
+        log_action(user['uuid'],user['role'], "viewed-allproperties", None)     
         return jsonify(property_list), 200
 
 
@@ -141,7 +141,6 @@ class ExternalPropertyAddView(MethodView):
         except Exception as e:
             logging.info("Externalproperty add error",  str(e))
             return jsonify({'error': str(e)})
-
 
 
 class PropertyUpdateView(MethodView):
@@ -227,7 +226,8 @@ class PropertyUpdateView(MethodView):
                     {'$set': {'images': property_data['images']}}
                 )
             
-            log_action(user['uuid'],user['role'],user['email'],"updated-property",property_data)
+            property_data['property_id'] = property_id
+            log_action(user['uuid'], user['role'], "updated-property", property_data)
             return jsonify({'message': 'Property information updated successfully'}), 200
         else:
             return jsonify({'error': 'User not found'}), 200
@@ -260,16 +260,12 @@ class PropertyImageDeleteView(MethodView):
             property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
             property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
             
-
-
             if property_data is None or property_seller_data is None:
                 return jsonify({'error': 'Property does not Exists or you are not allowed to delete image to this property'}), 200
-
 
             if not property_data:
                 return jsonify({'error': 'Property not found'}), 200
             
-
             file_name = os.path.basename(image_url)
            
             # Delete the file from the server
@@ -298,7 +294,7 @@ class PropertyImageDeleteView(MethodView):
                 return jsonify({'error': 'Failed to delete the image'}), 200
             
            
-            log_action(user['uuid'],user['role'],user['email'],"image-deleted",data)
+            log_action(user['uuid'], user['role'],"deleted-property-image", data)
             return jsonify({'message': 'Image deleted successfully'}), 200
         else:
             return jsonify({'error': 'User not found'}), 200

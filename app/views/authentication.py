@@ -94,7 +94,7 @@ class RegisterUserView(MethodView):
                 upsert=True
             )
             send_otp_via_email(new_user['email'], otp, subject='OTP for user verification')
-            log_action(new_user['uuid'],new_user['role'],new_user['email'],"registration",new_user)
+            log_action(new_user['uuid'],new_user['role'],"registration", new_user)
             return jsonify(
                 {
                     'message': 'User registered successfully, OTP has been sent on email Please verify it.'
@@ -135,7 +135,7 @@ class LoginUserView(MethodView):
             if encrpted_password == user['password']:
                 access_token = create_access_token(identity=email)
                 
-                log_action(user['uuid'],user['role'],user['email'],"email-login",data)
+                log_action(user['uuid'], user['role'], "email-login", data)
                 return jsonify({"message":"User Logged in successfully!", "access_token":access_token}), 200
             else:
                 return jsonify({'error': 'Email or Password is incorrect!'}), 200
@@ -167,7 +167,7 @@ class UserUuidLoginView(MethodView):
                 return jsonify({'error': 'Verify user to login!'}), 200
             
             access_token = create_access_token(identity=uuid)
-            log_action(user['uuid'],user['role'],user['email'],"uuid-login",data)
+            log_action(user['uuid'], user['role'], "uuid-login", data)
             return jsonify({"message":"User Logged in successfully!", "access_token":access_token}), 200
         return jsonify({'error': 'User does not exist, please register the user'}), 200
 
@@ -185,7 +185,7 @@ class ProfileUserView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if user:
-            log_action(user['uuid'],user['role'],user['email'],"get-profile",None)
+            log_action(user['uuid'], user['role'], "viewed-profile", None)
             user.pop('_id', None)
             user.pop('password', None)
             user.pop('downloaded_documents', None)
@@ -215,7 +215,7 @@ class UserUUIDView(MethodView):
         # Query MongoDB collection for users
         user = current_app.db.users.find_one({"email": email})
         if user:
-            log_action(user['uuid'],user['role'],user['email'],"view-uuid",data)
+            log_action(user['uuid'], user['role'], "viewed-uuid", data)
             return jsonify({'uuid': user.get('uuid', None)})
         
         return jsonify({"error": "User does not exist"}), 200
@@ -239,8 +239,7 @@ class LogoutUserView(MethodView):
             "created_at": now,
             'user_id': user['uuid']
         })
-        log_action(user['uuid'],user['role'],user['email'],"logout",None)
-        #current_app.db.users.update_one({'email': user['email']}, {'$set': {'is_logged_in': False}})
+        log_action(user['uuid'], user['role'], "logout", None)
         return jsonify({"message": "logout successfully"}), 200
 
 
@@ -320,7 +319,7 @@ class UpdateUsersView(MethodView):
         )
 
         if updated_user:
-            log_action(updated_user['uuid'],updated_user['role'],updated_user['email'],"profile-updated",update_doc)
+            log_action(updated_user['uuid'], updated_user['role'], "updated-profile", update_doc)
             return jsonify({'message':"User updated Successfully!"}), 200
         else:
             return jsonify({'error': 'User not found or no fields to update!'}), 200  
@@ -349,7 +348,9 @@ class ForgetPasswdView(MethodView):
                 {'$set': {'otp': {'value': otp, 'time': current_time,  'is_used': False}}}, 
                 upsert=True
             )
-            log_action(user['uuid'],user['role'],user['email'],"forget-password",data)
+            data['otp'] = otp
+            data['time'] = current_time
+            log_action(user['uuid'], user['role'], "forget-password", data)
             send_otp_via_email(user['email'], otp, subject='OTP for Password Reset')
             return jsonify({'message': 'OTP sent to your email'}), 200
         else:
@@ -385,8 +386,7 @@ class ResetPasswdView(MethodView):
             if time_difference.total_seconds() <= 3600 and user['otp']['is_used'] == False:
                 hashed_password = hashlib.sha256(new_password.encode("utf-8")).hexdigest()  
                 current_app.db.users.update_one({'email': email}, {'$set': {'password': hashed_password, "otp.is_used": True}})
-                
-                log_action(user['uuid'],user['role'],user['email'],"reset-password",data)
+                log_action(user['uuid'], user['role'], "reset-password",  data)
                 return jsonify({'message': 'password reset successfully'}), 200
             else:
                 return jsonify({'message': 'OTP has used or expired'}), 200
@@ -414,7 +414,7 @@ class VerifyOtpView(MethodView):
             time_difference = current_time - otp_created_at
             if time_difference.total_seconds() <= 3600:
                 current_app.db.users.update_one({'email': email}, {'$set': {'is_verified': True,  "otp.is_used": True}})
-                log_action(user['uuid'],user['role'],user['email'],"otp-verifed",data)
+                log_action(user['uuid'], user['role'], "otp-verification", data)
                 return jsonify({'message': 'OTP verification successful'}), 200
             else:
                 return jsonify({'message': 'OTP has expired'}), 200

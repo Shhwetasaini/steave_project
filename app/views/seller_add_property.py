@@ -105,8 +105,7 @@ class PropertyTypeSelectionView(MethodView):
             'last_name': user['last_name'],
             'email': user['email'],
             'phone': user['phone'],
-            'user_id': user['uuid'],
-            
+            'user_id': user['uuid']
         }
         property_data.pop('_id', None)
         transaction_result = current_app.db.transaction.insert_one({
@@ -116,13 +115,14 @@ class PropertyTypeSelectionView(MethodView):
             'signed_property_contract': None
         })
 
-        log_action(user['uuid'],user['role'],user['email'],"property-added",data)
         if transaction_result.inserted_id:
             transaction_id = str(transaction_result.inserted_id)
             logger.info('Transaction created successfully')
         else:
             return jsonify({'error': 'Failed to create transaction.'})
-        
+        data['property_id'] = property_id
+        data['transaction_id'] = transaction_id
+        log_action(user['uuid'], user['role'], "selected-property_address and property_type", data)
         return jsonify({'message':'data saved successfully.', 'transaction_id': transaction_id})
 
 
@@ -153,7 +153,12 @@ class PropertyUploadImageView(MethodView):
             return jsonify({'error':'Invalid Transaction'})
         
         #Check for incorrect or used transaction
-        existing_transaction = current_app.db.property_seller_transaction.find_one({"transaction_id": transaction_id, 'property_id': transaction_data['property_data']['property_id']})
+        existing_transaction = current_app.db.property_seller_transaction.find_one(
+            {
+             'transaction_id': transaction_id, 
+             'property_id': transaction_data['property_data']['property_id']
+            }
+        )
         if existing_transaction:
             return jsonify({'error':'Invalid transaction, transaction already exist for this property'})
         
@@ -186,18 +191,26 @@ class PropertyUploadImageView(MethodView):
                     )
                     image_urls.append(image_url)
                 
-                current_app.db.properties.update_one({"_id": ObjectId(transaction_data['property_data']['property_id'])}, {"$set": {"images": image_urls}})
+                current_app.db.properties.update_one(
+                    {"_id": ObjectId(transaction_data['property_data']['property_id'])},
+                    {"$set": {"images": image_urls}}
+                )
                 current_app.db.transaction.update_one(
                     {"_id": ObjectId(transaction_id)},
                     {"$set": {"property_data.images": image_urls}}
                 )
                 uploaded_images = len(image_urls)
-                payload ={"transaction_id":transaction_id,"images":image_urls}
-                log_action(user['uuid'],user['role'],user['email'],"property-images",data)
+                
             except Exception as e:
                 logger.error(f"Error Uploading property images: {str(e)}")
                 return jsonify({'error':'Failed to upload image'})
-
+            
+        payload = {
+            "transaction_id":transaction_id, 
+            "property_id": transaction_data['property_data']['property_id'], 
+            "images": image_urls
+        }
+        log_action(user['uuid'],user['role'], "added-property-images", payload)
         return jsonify({'message':'data saved successfully.', 'uploaded_images':uploaded_images})
 
 
@@ -286,9 +299,12 @@ class SavePdfView(MethodView):
                 {'uuid': transaction.get('user_info')['user_id']},
                 {'$push': {'uploaded_documents': document_data}}
             )
-            log_action(user['uuid'],user['role'],user['email'],"save-pdf",data)
+            
             current_app.db.transaction.update_one({"_id": ObjectId(transaction_id)}, {"$set": {"signed_property_contract": doc_url}})
-           
+
+            document_data['transaction_id'] = transaction_id
+            document_data['property_id'] =  transaction['property_data']['property_id']
+            log_action(user['uuid'], user['role'], "signed-property_contract", document_data) 
             return jsonify({'message':'data saved successfully.'})
         except Exception as e:
             print("Error during PDF generation:", str(e))
@@ -332,7 +348,6 @@ class CheckoutView(MethodView):
         if not transaction:
             return jsonify({'error':'Invalid Transaction'})
         
-         
         #Check for incorrect or used transaction
         existing_transaction = current_app.db.property_seller_transaction.find_one({"transaction_id": transaction_id, 'property_id': transaction['property_data']['property_id']})
         if existing_transaction:
@@ -361,8 +376,7 @@ class CheckoutView(MethodView):
                 source=token,
                 description='Seller App',
             )
-            
-            
+        
             if not (charge.paid and charge.status == 'succeeded'):
                 return jsonify({'error': 'Payment failed.'})
             
@@ -385,8 +399,11 @@ class CheckoutView(MethodView):
             # Replace `send_email` with your actual email sending function
             status_code, headers = send_email(subject, message, recipient_email)
             if status_code == 202:
-                log_action(user['uuid'],user['role'],user['email'],"checkout-payment",data)
-
+                payload = {
+                    'transaction':transaction,
+                    'property_seller_transaction': lookup_data
+                } 
+                log_action(user['uuid'],user['role'], "purchassed-property", payload)
                 logger.info("Email sent successfully.")
                 return jsonify({'message': 'Property purchase succesfull.'})  # Specify the success URL
             else:
