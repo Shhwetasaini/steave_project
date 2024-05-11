@@ -1,7 +1,7 @@
 from flask import Blueprint
 from app.views.authentication import *
 from app.views.messaging import *
-from app.views.notifications import *
+
 from app.views.seller_add_property import *
 from app.views.media import *
 from app.views.properties import *
@@ -23,7 +23,7 @@ api_bp.add_url_rule(rule='/user/logout', view_func=LogoutUserView.as_view('logou
 api_bp.add_url_rule(rule='/user/update', view_func=UpdateUsersView.as_view('update_user'))
 api_bp.add_url_rule(rule='/user/forgot-passwd', view_func=ForgetPasswdView.as_view('forgot_passwd'))
 api_bp.add_url_rule(rule='/user/reset-passwd', view_func=ResetPasswdView.as_view('reset_passwd'))
-api_bp.add_url_rule(rule='/user/notifications', view_func=NotificationView.as_view('user_notifications'))
+
 api_bp.add_url_rule(rule='/user/check_response', view_func=CheckResponseView.as_view('check_response'))
 api_bp.add_url_rule(rule='/user/send-message', view_func=SaveUserMessageView.as_view('send_message'))
 

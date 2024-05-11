@@ -24,7 +24,10 @@ class AllDocumentsView(MethodView):
     def get(self):
         log_request(request)
         current_user = get_jwt_identity()
+        user = current_db.users.find_one({'email': current_user})
+        
         documents = list(current_app.db.documents.find({},{'_id':False}))
+        log_action(user['uuid'],user['role'],user['email'],"get-all-documents",None)
         return jsonify(documents), 200
          
 
@@ -33,6 +36,8 @@ class EditDocumentsView(MethodView):
     def put(self):
         log_request(request)
         current_user = get_jwt_identity()
+        user = current_db.users.find_one({'email': current_user})
+      
         update_doc = {}
         
         data = request.json
@@ -64,6 +69,7 @@ class EditDocumentsView(MethodView):
             {"$set": update_doc},
             return_document=True 
         )
+        log_action(user['uuid'],user['role'],user['email'],"updated-document",update_doc)
         if updated_document:
             return jsonify({'message': 'Document Updated Successfully!'})       
 
@@ -74,9 +80,11 @@ class FlFormsView(MethodView):
     def get(self):
         log_request(request)
         current_user = get_jwt_identity()
+        user = current_db.users.find_one({'email': current_user})
         
         root_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'FL_Forms')
         folders_and_files = get_folders_and_files(root_dir)
+        log_action(user['uuid'],user['role'],user['email'],"viewed-FL-forms",None)
         return jsonify(folders_and_files), 200
        
 
@@ -86,9 +94,10 @@ class MnFormsView(MethodView):
     def get(self):
         log_request(request)
         current_user = get_jwt_identity()
-      
+        user = current_db.users.find_one({'email': current_user})
         root_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms')
         folders_and_files = get_folders_and_files(root_dir)
+        log_action(user['uuid'],user['role'],user['email'],"viewed-ML-forms",None)
         return jsonify(folders_and_files), 200
        
 
@@ -98,6 +107,7 @@ class SingleFlFormsView(MethodView):
     def get(self, filename, folder):
         log_request(request)
         current_user = get_jwt_identity()
+        user = current_db.users.find_one({'email': current_user})
         # Specify the folder path
         folder_path = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'FL_Forms', folder)
         # Check if the file exists in the folder
@@ -105,6 +115,7 @@ class SingleFlFormsView(MethodView):
             # Query MongoDB collection for the document object
             document = current_app.db.documents.find_one({'name': filename},  {'_id': 0})
             if document:
+                log_action(user['uuid'],user['role'],user['email'],"viewed-single-FL-forms",None)
                 return jsonify(document), 200
             else:
                 return jsonify({'error': 'Document not found in the database'}), 404
@@ -117,6 +128,7 @@ class SingleMnFormsView(MethodView):
     def get(self, filename, folder):
         log_request(request)
         current_user = get_jwt_identity()
+        user = current_db.users.find_one({'email': current_user})
         # Specify the folder path
         folder_path = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms', folder)
 
@@ -125,6 +137,7 @@ class SingleMnFormsView(MethodView):
             # Query MongoDB collection for the document object
             document = current_app.db.documents.find_one({'name': filename},  {'_id': 0})
             if document:
+                log_action(user['uuid'],user['role'],user['email'],"viewed-single-ML-forms",None)
                 return jsonify(document), 200
             else:
                 return jsonify({'error': 'Document not found in the database'}), 404
@@ -137,6 +150,7 @@ class UploadDocumentView(MethodView):
     def post(self):
         log_request(request)
         current_user = get_jwt_identity()
+        user = current_db.users.find_one({'email': current_user})
         update_doc = {}
 
         data = request.form
@@ -156,7 +170,9 @@ class UploadDocumentView(MethodView):
         os.makedirs(file_dir, exist_ok=True)
         file_path = os.path.join(file_dir, filename)
         file.save(file_path)
-        update_files_in_documents_db()
+        document_data = update_files_in_documents_db()
+        data['document_data']=document_data
+        log_action(user['uuid'],user['role'],user['email'],"uploaded-document",data)
         return jsonify({'message': 'File uploaded succesfully'}), 200
         
 
@@ -166,7 +182,9 @@ class MoveFlFormsFileView(MethodView):
     def post(self):
         log_request(request)
         current_user = get_jwt_identity()
+        user = current_db.users.find_one({'email': current_user})
         try:
+            
             # Get data from the frontend
             filename_with_extension = request.json.get('filename')
             source_folder = request.json.get('source_folder')
@@ -210,7 +228,12 @@ class MoveFlFormsFileView(MethodView):
                     'type': 'FL_Forms'
                 }}
             )
-            
+            data = {'source_folder':source_folder,
+                    'dest_folder':dest_folder,
+                    'file':doc_url,
+                    'preview_image':preview_page_url}
+
+            log_action(user['uuid'],user['role'],user['email'],"move-FL-forms",data)
             return jsonify({'message': 'Files moved successfully'}), 200
         except Exception as e:
             print(str(e))
@@ -222,6 +245,7 @@ class MoveMnFormsFileView(MethodView):
     def post(self):
         log_request(request)
         current_user = get_jwt_identity()
+        user = current_db.users.find_one({'email': current_user})
         try:
             # Get data from the frontend
             filename_with_extension = request.json.get('filename')
@@ -266,7 +290,12 @@ class MoveMnFormsFileView(MethodView):
                     'type': 'FL_Forms'
                 }}
             )
-            
+            data = {'source_folder':source_folder,
+                    'dest_folder':dest_folder,
+                    'file':doc_url,
+                    'preview_image':preview_page_url}
+
+            log_action(user['uuid'],user['role'],user['email'],"move-ML-forms",data)
             return jsonify({'message': 'Files moved successfully'}), 200
         except Exception as e:
             print(str(e))
@@ -278,9 +307,11 @@ class DownloadedDocsView(MethodView):
     def get(self, uuid):
         log_request(request)
         current_user = get_jwt_identity()
+        logged_in_user = current_db.users.find_one({'email': current_user})
        
         user = current_app.db.users.find_one({'uuid': uuid}, {'_id': 0})
         if user:
+            log_action(logged_in_user['uuid'],logged_in_user['role'],logged_in_user['email'],"move-ML-forms",None)
             return jsonify(user), 200
         else:
             return jsonify({"error":"User does not exist!"}), 404
@@ -292,9 +323,10 @@ class UploadedDocsView(MethodView):
     def get(self, uuid):
         log_request(request)
         current_user = get_jwt_identity()
-        
+        logged_in_user = current_db.users.find_one({'email': current_user})
         user = current_app.db.users.find_one({'uuid': uuid}, {'_id': 0})
         if user:
+            log_action(logged_in_user['uuid'],logged_in_user['role'],logged_in_user['email'],"move-ML-forms",None)
             return jsonify(user), 200
         else:
             return jsonify({"error":"User does not exist!"}), 404

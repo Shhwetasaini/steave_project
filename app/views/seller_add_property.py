@@ -14,7 +14,7 @@ from werkzeug.utils import secure_filename
 
 from flask import session, current_app, request, jsonify, url_for
 from flask_jwt_extended import get_jwt_identity
-from app.services.authentication import custom_jwt_required
+from app.services.authentication import custom_jwt_required, log_action
 from app.services.admin import log_request
 from flask.views import MethodView
 
@@ -105,7 +105,8 @@ class PropertyTypeSelectionView(MethodView):
             'last_name': user['last_name'],
             'email': user['email'],
             'phone': user['phone'],
-            'user_id': user['uuid']
+            'user_id': user['uuid'],
+            
         }
         property_data.pop('_id', None)
         transaction_result = current_app.db.transaction.insert_one({
@@ -115,6 +116,7 @@ class PropertyTypeSelectionView(MethodView):
             'signed_property_contract': None
         })
 
+        log_action(user['uuid'],user['role'],user['email'],"property-added",data)
         if transaction_result.inserted_id:
             transaction_id = str(transaction_result.inserted_id)
             logger.info('Transaction created successfully')
@@ -129,6 +131,16 @@ class PropertyUploadImageView(MethodView):
 
     def post(self):
         log_request(request)
+        current_user = get_jwt_identity()
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'})
+
         data = request.form
         transaction_id = data.get('transaction_id')
         images = request.files.getlist("images")
@@ -180,6 +192,8 @@ class PropertyUploadImageView(MethodView):
                     {"$set": {"property_data.images": image_urls}}
                 )
                 uploaded_images = len(image_urls)
+                payload ={"transaction_id":transaction_id,"images":image_urls}
+                log_action(user['uuid'],user['role'],user['email'],"property-images",data)
             except Exception as e:
                 logger.error(f"Error Uploading property images: {str(e)}")
                 return jsonify({'error':'Failed to upload image'})
@@ -191,6 +205,16 @@ class SavePdfView(MethodView):
     decorators = [custom_jwt_required()]
     def post(self):
         log_request(request)
+        current_user = get_jwt_identity()
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'})
+
         data = request.json
         transaction_id = data.get('transaction_id')
         signature_data = data.get('signature_data')
@@ -262,6 +286,7 @@ class SavePdfView(MethodView):
                 {'uuid': transaction.get('user_info')['user_id']},
                 {'$push': {'uploaded_documents': document_data}}
             )
+            log_action(user['uuid'],user['role'],user['email'],"save-pdf",data)
             current_app.db.transaction.update_one({"_id": ObjectId(transaction_id)}, {"$set": {"signed_property_contract": doc_url}})
            
             return jsonify({'message':'data saved successfully.'})
@@ -281,6 +306,15 @@ class CheckoutView(MethodView):
     decorators = [custom_jwt_required()]
     def post(self):
         logger.info("Checkout process initiated.")
+        current_user = get_jwt_identity()
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'})
 
         data = request.json
         transaction_id = data.get('transaction_id')
@@ -288,7 +322,7 @@ class CheckoutView(MethodView):
         code = data.get('code')
         payment_amount = int(data.get('payment_amount', 997)  or 0)
 
-        if payment_amount != 497 or payment_amount != 997:
+        if payment_amount != 497 and payment_amount != 997:
             return jsonify({'error':'Invalid payment amount'})
         
         if not transaction_id or not token:
@@ -327,7 +361,8 @@ class CheckoutView(MethodView):
                 source=token,
                 description='Seller App',
             )
-
+            
+            
             if not (charge.paid and charge.status == 'succeeded'):
                 return jsonify({'error': 'Payment failed.'})
             
@@ -350,6 +385,8 @@ class CheckoutView(MethodView):
             # Replace `send_email` with your actual email sending function
             status_code, headers = send_email(subject, message, recipient_email)
             if status_code == 202:
+                log_action(user['uuid'],user['role'],user['email'],"checkout-payment",data)
+
                 logger.info("Email sent successfully.")
                 return jsonify({'message': 'Property purchase succesfull.'})  # Specify the success URL
             else:

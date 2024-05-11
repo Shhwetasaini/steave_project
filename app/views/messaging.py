@@ -10,8 +10,7 @@ import werkzeug
 
 from flask import current_app, url_for
 from app.services.admin import log_request
-from app.services.authentication import custom_jwt_required
-from app.views.notifications import store_notification
+from app.services.authentication import custom_jwt_required , log_action
 
 
 class SaveUserMessageView(MethodView):
@@ -133,7 +132,9 @@ class BuyerSellersChatView(MethodView):
 
         if not messages:
             return jsonify({'error': 'No messages found'}), 200
+        payload ={"property_id":property_id,"chat_user_id":user_id}
         
+        log_action(user['uuid'],user['role'],user['email'],"buy-seller-chat",payload)
         return jsonify(messages['message_content']), 200
     
 
@@ -245,6 +246,7 @@ class BuyerSellersChatView(MethodView):
         
         mqtt_client.unsubscribe(mqtt_topic)
         
+        log_action(user['uuid'],user['role'],user['email'],"buy-seller-chat",data)
         return jsonify({'message': 'Message sent successfully'}), 200
 
 
@@ -282,6 +284,8 @@ class ChatUsersListView(MethodView):
                 receiver['first_name'] = seller.get('first_name') if seller else None
                 receiver['profile_pic'] = seller.get('profile_pic') if seller else None
                 receiver['user_id'] = receiver.pop('seller_id')
+               
+                log_action(user['uuid'],user['role'],user['email'],"buy-seller-chat",None)
             return jsonify(receivers), 200
         else: 
             seller_id = user['uuid']
@@ -297,6 +301,8 @@ class ChatUsersListView(MethodView):
                 receiver['first_name'] = buyer.get('first_name') if buyer else None
                 receiver['profile_pic'] = buyer.get('profile_pic') if buyer else None
                 receiver['user_id'] = receiver.pop('buyer_id')
+                log_action(user['uuid'],user['role'],user['email'],"buy-seller-chat",None)
+               
             return jsonify(receivers), 200
 
 

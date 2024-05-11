@@ -10,9 +10,9 @@ from flask_jwt_extended import get_jwt_identity
 
 from flask import current_app
 from app.services.admin import log_request
-from app.services.authentication import custom_jwt_required
+from app.services.authentication import custom_jwt_required, log_action
 from app.services.media import extract_first_page_as_image, document_exists, resource_exists
-from app.views.notifications import store_notification
+
 
 
 class ReceiveMediaView(MethodView):
@@ -32,6 +32,9 @@ class ReceiveMediaView(MethodView):
         if request.content_type.startswith('multipart/form-data'):
             file = request.files.get('file')
             label = request.form.get('label', 'no_label')
+
+            if ' ' in label:
+                return jsonify({'error':'Spaces are not allowed in the label!'}), 200
 
             if not file:
                 return jsonify({'error':'file is missing!'}), 200
@@ -55,13 +58,8 @@ class ReceiveMediaView(MethodView):
                     {'$push': {'user_media': {'$each': uploaded_media}}},
                     upsert=True
                 )
-                store_notification(
-                    user_id=user['uuid'], 
-                    title="Upload Media", 
-                    message="media uploaded successfully", 
-                    type="media"
-                )
-
+                log_action(user['uuid'],user['role'],user['email'],"upload-media",uploaded_media)
+                
 
         elif request.is_json:
             # Handle JSON content if needed. This block is placeholder for future expansion.
@@ -90,13 +88,14 @@ class SendMediaView(MethodView):
         if not all_media:
             return jsonify([]), 200
         
+        log_action(user['uuid'],user['role'],user['email'],"get-media",None)      
         return jsonify(all_media.get('user_media')), 200
 
 
 class DeleteMediaView(MethodView):
     decorators = [custom_jwt_required()]
 
-    def post(self):
+    def delete(self):
         log_request(request)
         current_user = get_jwt_identity()
 
@@ -113,10 +112,11 @@ class DeleteMediaView(MethodView):
 
         # Extract the filename from the URL
         file_name = os.path.basename(file_url)
-
+     
         # Delete the file from the server
         user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'users_media', str(user['uuid']))
         file_path = os.path.join(user_media_dir, file_name)
+       
         if os.path.exists(file_path):
             os.remove(file_path)
         else:
@@ -128,12 +128,8 @@ class DeleteMediaView(MethodView):
             {'$pull': {'user_media': {'file': file_url}}},
             upsert=True
         )
-        store_notification(
-            user_id=user['uuid'], 
-            title="Delete Media", 
-            message="media deleted successfully",
-            type="media"
-        )
+        log_action(user['uuid'],user['role'],user['email'],"deleted-media",{'file': file_url})
+        
 
         return jsonify({'message': 'File deleted successfully'}), 200
     
@@ -185,20 +181,27 @@ class DownloadDocView(MethodView):
             }
         }
         existing_document = current_app.db.users.find_one(query)
-
+        
         if existing_document:
             current_app.db.users.update_one(
                 query,
                 {'$set': {'downloaded_documents.$.is_signed': document_data['is_signed']}}
             )
-            store_notification(user_id=user['uuid'], title="Document", message="Document downloaded successfully")
+         
+            log_action(user['uuid'],user['role'],user['email'],"download-media",{'file': name})
+        
+
             return jsonify({"message": "Document already exists for the user. Updated."}), 200
         else:
             # Add the new document to the user's downloaded_documents field
+            
+            
+            
             current_app.db.users.update_one(
                 {'uuid': user['uuid']},
                 {'$push': {'downloaded_documents': document_data}}
             )
+            log_action(str(user['_id']),"download-media",{'file': name})
             return jsonify({"message": "Document successfully added to user's documents"}), 200
 
    
@@ -242,12 +245,8 @@ class UploadDocView(MethodView):
                 {'uuid': user['uuid']},
                 {'$push': {'uploaded_documents': document_data}}
             )
-            store_notification(
-                user_id=user['uuid'],
-                title="Document Upload",
-                message="Document uploaded successfully",
-                type="document"
-            )
+         
+            log_action(str(user['_id']),"upload-media",document_data)
             return jsonify({"message": "File successfully uploaded!", "document_data": document_data}), 200
         else:
             return jsonify({"error": "File is missing or invalid filename."}), 400
@@ -307,6 +306,7 @@ class UserDownloadedDocsView(MethodView):
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user}, {'downloaded_documents': 1, '_id': 0})
         if user:
+            log_action(str(user['_id']),"user-download-media",None)
             return jsonify(user['downloaded_documents']), 200
         else:
             return jsonify({'error': 'User not found'}), 200
@@ -324,6 +324,7 @@ class UserUploadedDocsView(MethodView):
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user}, {'uploaded_documents': 1, '_id': 0})
         if user:
+            log_action(str(user['_id']),"upload-media",None)
             return jsonify(user['uploaded_documents']), 200
         else:
             return jsonify({'error': 'User not found'}), 200
