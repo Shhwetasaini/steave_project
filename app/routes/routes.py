@@ -77,7 +77,7 @@ api_bp.add_url_rule(rule='/admin/document/update', view_func=EditDocumentsView.a
 api_bp.add_url_rule(rule='/admin/document/upload', view_func=UploadDocumentView.as_view('admin_document_upload'))
 api_bp.add_url_rule(rule='/admin/document/flforms/move', view_func=MoveFlFormsFileView.as_view('admin_document_flforms_move'))
 api_bp.add_url_rule(rule='/admin/document/mnforms/move', view_func=MoveMnFormsFileView.as_view('admin_document_mnforms_move'))
-
+api_bp.add_url_rule(rule='/admin/user/actions', view_func=ActionLogsView.as_view('admin_user_action'))
 
 # Buyers APIs
 #api_bp.add_url_rule(rule='/users/buyers/add', view_func=AddBuyerView.as_view('add_buyers'))

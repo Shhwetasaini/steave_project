@@ -295,3 +295,19 @@ class GetMediaView(MethodView):
             except TypeError:
                 continue
         return jsonify(all_media), 200
+
+
+class ActionLogsView(MethodView):
+    decorators =  [custom_jwt_required()]
+    def get(self):
+        log_request(request)
+        current_user = get_jwt_identity()
+        
+        all_logs = list(current_app.db.audit.find({}, {'_id': 0}))
+        for log in all_logs:
+            user = current_app.db.users.find_one({'uuid':log['user_id']})
+            try:
+                log['email'] = user['email']
+            except TypeError:
+                continue
+        return jsonify(all_logs), 200
