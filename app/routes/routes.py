@@ -55,8 +55,11 @@ api_bp.add_url_rule(rule='user/properties/add/external', view_func=ExternalPrope
 
 
 # Admin UI APIs
+api_bp.add_url_rule(rule='/admin/dashboard', view_func=DashboardView.as_view('admin_dashboard'))
 api_bp.add_url_rule(rule='/admin/users', view_func=AllUserView.as_view('users'))
-api_bp.add_url_rule(rule='/admin/user/register', view_func=AddUserView.as_view('admin_user_register'))
+api_bp.add_url_rule(rule='/admin/user/register', view_func=AdminRegisterUserView.as_view('admin_user_register'))
+api_bp.add_url_rule(rule='/admin/user/add', view_func=AddUserView.as_view('admin_user_add'))
+api_bp.add_url_rule(rule='/admin/user/login', view_func=AdminUserLoginView.as_view('admin_user_login'))
 api_bp.add_url_rule(rule='/admin/user/update', view_func=EditUsersView.as_view('admin_user_update'))
 api_bp.add_url_rule(rule='/admin/user/delete', view_func=DeleteUserView.as_view('admin_user_delete'))
 api_bp.add_url_rule(rule='/admin/user/media', view_func=GetMediaView.as_view('admin_user_media'))

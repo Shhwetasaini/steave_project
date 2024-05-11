@@ -6,16 +6,17 @@ import json
 from flask.views import MethodView
 from flask import jsonify, request
 from flask import current_app
+from flask_jwt_extended import get_jwt_identity
 
-from app.services.authentication import authenticate_request
+from app.services.authentication import custom_jwt_required
 from app.services.admin import log_request
 
 
 class ChatView(MethodView):
+    decorators =  [custom_jwt_required()]
     def get(self):
         log_request(request)
-        if not authenticate_request(request):
-            return jsonify({'error': 'Unauthorized'}), 401 
+        current_user = get_jwt_identity() 
         
         users_cursor = current_app.db.users.find({}, {'_id': False, 'password': False})
         users = list(users_cursor)
@@ -60,10 +61,11 @@ class ChatView(MethodView):
 
 
 class UpdateChatStatus(MethodView):
+    decorators =  [custom_jwt_required()]
     def post(self):
         log_request(request)
-        if not authenticate_request(request):
-            return jsonify({'error': 'Unauthorized'}), 401 
+        current_user = get_jwt_identity() 
+       
         data = request.json
         email = data.get('email')
         user = current_app.db.users.find_one({'email': email})
@@ -76,11 +78,11 @@ class UpdateChatStatus(MethodView):
 
 
 class SaveAdminResponseView(MethodView):
+    decorators =  [custom_jwt_required()]
     def post(self):
         from app import mqtt_client
         log_request(request)
-        if not authenticate_request(request):
-            return jsonify({'error': 'Unauthorized'}), 401 
+        current_user = get_jwt_identity()
 
         data = request.json 
         message_id = data.get('message_id')

@@ -7,8 +7,9 @@ from flask.views import MethodView
 from flask import jsonify, request, url_for
 from flask import current_app
 from werkzeug.utils import secure_filename
+from flask_jwt_extended import get_jwt_identity
 
-from app.services.authentication import authenticate_request
+from app.services.authentication import custom_jwt_required
 from app.services.admin import (
     log_request, 
     get_folders_and_files, 
@@ -19,80 +20,84 @@ from app.services.admin import (
 
 
 class AllDocumentsView(MethodView):
+    decorators =  [custom_jwt_required()]
     def get(self):
         log_request(request)
-        if authenticate_request(request):
-            documents = list(current_app.db.documents.find({},{'_id':False}))
-            return jsonify(documents), 200
-        else:
-            return jsonify({'error': 'Unauthorized'}), 401 
-        
+        current_user = get_jwt_identity()
+        documents = list(current_app.db.documents.find({},{'_id':False}))
+        return jsonify(documents), 200
+         
 
 class EditDocumentsView(MethodView):
+    decorators =  [custom_jwt_required()]
     def put(self):
         log_request(request)
+        current_user = get_jwt_identity()
         update_doc = {}
-        if authenticate_request(request):
-            data = request.json
-            docname = data.get('docname')
-            description =  data.get('description')
-            rename = data.get('rename')
-            folder = data.get('folder')
+        
+        data = request.json
+        docname = data.get('docname')
+        description =  data.get('description')
+        rename = data.get('rename')
+        folder = data.get('folder')
+        
+        if description:
+            update_doc['description'] = description
+        if rename:
+            document = current_app.db.documents.find_one({'name' : rename + '.pdf'})
+            if not document:
+                new_url = rename_filename(docname, rename, folder)
+                updated_path = os.path.splitext(new_url)[0]
+                pdf_path = updated_path + '.pdf'
+                updated_pdf_path = pdf_path.rsplit('templates/')
+                doc_url = url_for('serve_media', filename=os.path.join('templates/'+ updated_pdf_path[1]).replace('\\', '/'))
+                preview_page_url = doc_url[:-4] + '.jpg'
+                update_doc['name'] = rename + '.pdf'
+                update_doc['url'] = doc_url
+                update_doc['preview_image'] = preview_page_url
+            else:
+                return jsonify({'error': 'File with this name already exist!'}), 400 
             
-            if description:
-                update_doc['description'] = description
-            if rename:
-                document = current_app.db.documents.find_one({'name' : rename + '.pdf'})
-                if not document:
-                    new_url = rename_filename(docname, rename, folder)
-                    updated_path = os.path.splitext(new_url)[0]
-                    pdf_path = updated_path + '.pdf'
-                    updated_pdf_path = pdf_path.rsplit('templates/')
-                    doc_url = url_for('serve_media', filename=os.path.join('templates/'+ updated_pdf_path[1]).replace('\\', '/'))
-                    preview_page_url = doc_url[:-4] + '.jpg'
-                    update_doc['name'] = rename + '.pdf'
-                    update_doc['url'] = doc_url
-                    update_doc['preview_image'] = preview_page_url
-                else:
-                    return jsonify({'error': 'File with this name already exist!'}), 400 
-                
-            update_doc['updated_at'] = datetime.now()
+        update_doc['updated_at'] = datetime.now()
+        updated_document = current_app.db.documents.find_one_and_update(
+            {"name": docname},
+            {"$set": update_doc},
+            return_document=True 
+        )
+        if updated_document:
+            return jsonify({'message': 'Document Updated Successfully!'})       
 
-            updated_document = current_app.db.documents.find_one_and_update(
-                {"name": docname},
-                {"$set": update_doc},
-                return_document=True 
-            )
-            if updated_document:
-                return jsonify({'message': 'Document Updated Successfully!'})       
-        else:
-            return jsonify({'error': 'Unauthorized'}), 401 
 
 
 class FlFormsView(MethodView):
+    decorators =  [custom_jwt_required()]
     def get(self):
         log_request(request)
-        if authenticate_request(request):
-            root_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'FL_Forms')
-            folders_and_files = get_folders_and_files(root_dir)
-            return jsonify(folders_and_files), 200
-        else:
-            return jsonify({'error': 'Unauthorized'}), 401 
+        current_user = get_jwt_identity()
+        
+        root_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'FL_Forms')
+        folders_and_files = get_folders_and_files(root_dir)
+        return jsonify(folders_and_files), 200
+       
 
 
 class MnFormsView(MethodView):
+    decorators =  [custom_jwt_required()]
     def get(self):
         log_request(request)
-        if authenticate_request(request):
-            root_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms')
-            folders_and_files = get_folders_and_files(root_dir)
-            return jsonify(folders_and_files), 200
-        else:
-            return jsonify({'error': 'Unauthorized'}), 401 
+        current_user = get_jwt_identity()
+      
+        root_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms')
+        folders_and_files = get_folders_and_files(root_dir)
+        return jsonify(folders_and_files), 200
+       
 
 
 class SingleFlFormsView(MethodView):
+    decorators =  [custom_jwt_required()]
     def get(self, filename, folder):
+        log_request(request)
+        current_user = get_jwt_identity()
         # Specify the folder path
         folder_path = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'FL_Forms', folder)
         # Check if the file exists in the folder
@@ -108,7 +113,10 @@ class SingleFlFormsView(MethodView):
 
 
 class SingleMnFormsView(MethodView):
+    decorators =  [custom_jwt_required()]
     def get(self, filename, folder):
+        log_request(request)
+        current_user = get_jwt_identity()
         # Specify the folder path
         folder_path = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms', folder)
 
@@ -125,39 +133,39 @@ class SingleMnFormsView(MethodView):
 
 
 class UploadDocumentView(MethodView):
+    decorators =  [custom_jwt_required()]
     def post(self):
         log_request(request)
+        current_user = get_jwt_identity()
         update_doc = {}
-        if authenticate_request(request):
-            data = request.form
-            folder_type = data.get('folder_type')
-            folder = data.get('folder') 
-            new_folder = data.get('new_folder')
-            file = request.files.get('file')
 
-            if folder:
-                file_folder = folder
-            else:
-                file_folder = new_folder
-
-            filename = file.filename
-            document  = current_app.db.documents.find_one({'name': filename})
-
-            if document:
-                return jsonify({'error': 'File with this name already exist!'}), 400 
-
-            file_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', folder_type, file_folder)
-            os.makedirs(file_dir, exist_ok=True)
-            file_path = os.path.join(file_dir, filename)
-            file.save(file_path)
-            update_files_in_documents_db()
-            return jsonify({'message': 'File uploaded succesfully'}), 200
+        data = request.form
+        folder_type = data.get('folder_type')
+        folder = data.get('folder') 
+        new_folder = data.get('new_folder')
+        file = request.files.get('file')
+        if folder:
+            file_folder = folder
         else:
-            return jsonify({'error': 'Unauthorized'}), 401 
+            file_folder = new_folder
+        filename = file.filename
+        document  = current_app.db.documents.find_one({'name': filename})
+        if document:
+            return jsonify({'error': 'File with this name already exist!'}), 400 
+        file_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', folder_type, file_folder)
+        os.makedirs(file_dir, exist_ok=True)
+        file_path = os.path.join(file_dir, filename)
+        file.save(file_path)
+        update_files_in_documents_db()
+        return jsonify({'message': 'File uploaded succesfully'}), 200
+        
 
 
 class MoveFlFormsFileView(MethodView):
+    decorators =  [custom_jwt_required()]
     def post(self):
+        log_request(request)
+        current_user = get_jwt_identity()
         try:
             # Get data from the frontend
             filename_with_extension = request.json.get('filename')
@@ -210,7 +218,10 @@ class MoveFlFormsFileView(MethodView):
 
 
 class MoveMnFormsFileView(MethodView):
+    decorators =  [custom_jwt_required()]
     def post(self):
+        log_request(request)
+        current_user = get_jwt_identity()
         try:
             # Get data from the frontend
             filename_with_extension = request.json.get('filename')
@@ -263,26 +274,28 @@ class MoveMnFormsFileView(MethodView):
 
 
 class DownloadedDocsView(MethodView):
+    decorators =  [custom_jwt_required()]
     def get(self, uuid):
         log_request(request)
-        if authenticate_request(request):
-            user = current_app.db.users.find_one({'uuid': uuid}, {'_id': 0})
-            if user:
-                return jsonify(user), 200
-            else:
-                return jsonify({"error":"User does not exist!"}), 404
+        current_user = get_jwt_identity()
+       
+        user = current_app.db.users.find_one({'uuid': uuid}, {'_id': 0})
+        if user:
+            return jsonify(user), 200
         else:
-            return jsonify({'error': 'Unauthorized'}), 401 
+            return jsonify({"error":"User does not exist!"}), 404
+
 
 
 class UploadedDocsView(MethodView):
+    decorators =  [custom_jwt_required()]
     def get(self, uuid):
         log_request(request)
-        if authenticate_request(request):
-            user = current_app.db.users.find_one({'uuid': uuid}, {'_id': 0})
-            if user:
-                return jsonify(user), 200
-            else:
-                return jsonify({"error":"User does not exist!"}), 404
+        current_user = get_jwt_identity()
+        
+        user = current_app.db.users.find_one({'uuid': uuid}, {'_id': 0})
+        if user:
+            return jsonify(user), 200
         else:
-            return jsonify({'error': 'Unauthorized'}), 401 
+            return jsonify({"error":"User does not exist!"}), 404
+        
