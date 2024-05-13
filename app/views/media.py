@@ -1,6 +1,6 @@
 from datetime import datetime
 import werkzeug
-import uuid
+import logging
 import os
 from email_validator import validate_email, EmailNotValidError
 
@@ -176,10 +176,10 @@ class DownloadDocView(MethodView):
                 }
             }
         }
-        existing_document = current_app.db.users.find_one(query)
+        existing_document = current_app.db.users_downloaded_docs.find_one(query)
         
         if existing_document:
-            current_app.db.users.update_one(
+            current_app.db.users_downloaded_docs.update_one(
                 query,
                 {'$set': {'downloaded_documents.$.is_signed': document_data['is_signed']}}
             )
@@ -187,9 +187,8 @@ class DownloadDocView(MethodView):
             return jsonify({"message": "Document already exists for the user. Updated."}), 200
         else:
             # Add the new document to the user's downloaded_documents field
-            current_app.db.users.update_one(
-                {'uuid': user['uuid']},
-                {'$push': {'downloaded_documents': document_data}}
+            current_app.db.users_downloaded_docs.insert_one(
+                {'uuid': user['uuid'], 'downloaded_documents':[document_data]}
             )
             log_action(user['uuid'], user['role'], "downloaded-document", document_data)
             return jsonify({"message": "Document successfully added to user's documents"}), 200
@@ -230,9 +229,10 @@ class UploadDocView(MethodView):
             }
 
             # Update the uploaded_documents collection
-            current_app.db.users.update_one(
+            current_app.db.users_uploaded_docs.update_one(
                 {'uuid': user['uuid']},
-                {'$push': {'uploaded_documents': document_data}}
+                {'$push': {'uploaded_documents': document_data}},
+                upsert=True
             )
          
             log_action(user['uuid'], user['uuid'], "uploaded-document", document_data)
@@ -300,12 +300,15 @@ class UserDownloadedDocsView(MethodView):
         current_user = get_jwt_identity()
         try:
             validate_email(current_user)
-            user = current_app.db.users.find_one({'email': current_user}, {'downloaded_documents': 1, '_id': 0})
+            user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
-            user = current_app.db.users.find_one({'uuid': current_user}, {'downloaded_documents': 1, '_id': 0})
+            user = current_app.db.users.find_one({'uuid': current_user})
         if user:
+            user_docs = current_app.db.users_downloaded_docs.find_one({'uuid': user['uuid']}, {'downloaded_documents': 1, '_id': 0})
+            if not user_docs:
+                return jsonify([]), 200
             log_action(user['uuid'], user['role'], "viewed-downloaded-docs", None)
-            return jsonify(user['downloaded_documents']), 200
+            return jsonify(user_docs['downloaded_documents']), 200
         else:
             return jsonify({'error': 'User not found'}), 200
 
@@ -318,11 +321,14 @@ class UserUploadedDocsView(MethodView):
         current_user = get_jwt_identity()
         try:
             validate_email(current_user)
-            user = current_app.db.users.find_one({'email': current_user}, {'uploaded_documents': 1, '_id': 0})
+            user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
-            user = current_app.db.users.find_one({'uuid': current_user}, {'uploaded_documents': 1, '_id': 0})
+            user = current_app.db.users.find_one({'uuid': current_user})
         if user:
+            user_docs = current_app.db.users_uploaded_docs.find_one({'uuid': user['uuid']}, {'uploaded_documents': 1, '_id': 0})
+            if not user_docs:
+                return jsonify([]), 200
             log_action(user['uuid'], user['role'], "viewed-downloaded-docs", None)
-            return jsonify(user['uploaded_documents']), 200
+            return jsonify(user_docs['uploaded_documents']), 200
         else:
             return jsonify({'error': 'User not found'}), 200

@@ -233,9 +233,10 @@ class BuyerSellersChatView(MethodView):
                 }
 
                 # Update the uploaded_documents collection
-                current_app.db.users.update_one(
+                current_app.db.users_uploaded_docs.update_one(
                     {'uuid': user['uuid']},
-                    {'$push': {'uploaded_documents': document_data}}
+                    {'$push': {'uploaded_documents': document_data}},
+                    upsert=True
                 )
             else:
                 # Handle the case where the file has an invalid extension

@@ -101,7 +101,7 @@ class RegisterUserView(MethodView):
                 }
             ), 200
         else:
-            return jsonify({'error': 'User already exists!, please login!'}), 200
+            return jsonify({'error': 'User already exists'}), 200
 
 
 class LoginUserView(MethodView):
@@ -188,9 +188,6 @@ class ProfileUserView(MethodView):
             log_action(user['uuid'], user['role'], "viewed-profile", None)
             user.pop('_id', None)
             user.pop('password', None)
-            user.pop('downloaded_documents', None)
-            user.pop('uploaded_documents', None)
-            user.pop('properties:', None)
             
             return jsonify(user), 200
         else:
@@ -319,7 +316,7 @@ class UpdateUsersView(MethodView):
         )
 
         if updated_user:
-            log_action(updated_user['uuid'], updated_user['role'], "updated-profile", update_doc)
+            log_action(user['uuid'], user['role'], "updated-profile", update_doc)
             return jsonify({'message':"User updated Successfully!"}), 200
         else:
             return jsonify({'error': 'User not found or no fields to update!'}), 200  

@@ -90,10 +90,10 @@ class AdminRegisterUserView(MethodView):
         existing_user = current_app.db.users.find_one(query)
         if not existing_user:
             current_app.db.users.insert_one(new_user)
-            log_action(new_user['uuid'], new_user['role'], new_user['email'], "registration", new_user)  
+            log_action(new_user['uuid'], new_user['role'], "registration", new_user)  
             return jsonify({'message': 'User registered successfully'}), 200
         else:
-            return jsonify({'error': 'User already exists with this email'}), 400
+            return jsonify({'error': 'User already exists'}), 400
 
 
 class AllUserView(MethodView):
@@ -180,7 +180,7 @@ class AddUserView(MethodView):
             log_action(logged_in_user['uuid'], logged_in_user['role'], "added-user", new_user)
             return jsonify({'message': 'User registered successfully'}), 200
         else:
-            return jsonify({'error': 'User already exists with this email'}), 400
+            return jsonify({'error': 'User already exists'}), 400
 
 
 class AdminUserLoginView(MethodView):
