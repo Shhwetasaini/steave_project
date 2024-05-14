@@ -19,7 +19,7 @@ class DashboardView(MethodView):
     decorators =  [custom_jwt_required()]
 
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
         log_action(user['uuid'], user['role'], "viewed-dashboard", None)
@@ -28,7 +28,7 @@ class DashboardView(MethodView):
 
 class AdminRegisterUserView(MethodView):
     def post(self):
-        log_request(request)
+        log_request()
 
         # Determine content type and parse data accordingly
         if request.content_type.startswith('multipart/form-data'):
@@ -90,6 +90,7 @@ class AdminRegisterUserView(MethodView):
         existing_user = current_app.db.users.find_one(query)
         if not existing_user:
             current_app.db.users.insert_one(new_user)
+            new_user.pop('_id')
             log_action(new_user['uuid'], new_user['role'], "registration", new_user)  
             return jsonify({'message': 'User registered successfully'}), 200
         else:
@@ -99,7 +100,7 @@ class AdminRegisterUserView(MethodView):
 class AllUserView(MethodView):
     decorators =  [custom_jwt_required()]
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
         log_action(user['uuid'], user['role'], "viewed-users-list", None)
@@ -111,7 +112,7 @@ class AddUserView(MethodView):
     decorators =  [custom_jwt_required()]
 
     def post(self):
-        log_request(request)
+        log_request()
 
         current_user = get_jwt_identity()
         logged_in_user = current_app.db.users.find_one({'email': current_user})
@@ -176,7 +177,7 @@ class AddUserView(MethodView):
         existing_user = current_app.db.users.find_one(query)
         if not existing_user:
             current_app.db.users.insert_one(new_user)
-            
+            new_user.pop('_id')
             log_action(logged_in_user['uuid'], logged_in_user['role'], "added-user", new_user)
             return jsonify({'message': 'User registered successfully'}), 200
         else:
@@ -185,8 +186,7 @@ class AddUserView(MethodView):
 
 class AdminUserLoginView(MethodView):
     def post(self):
-        log_request(request)
-
+        log_request()
 
         # Determine content type and parse data accordingly
         if request.content_type.startswith('multipart/form-data'):
@@ -218,7 +218,7 @@ class AdminUserLoginView(MethodView):
 class EditUsersView(MethodView):
     decorators =  [custom_jwt_required()]
     def put(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         
         logged_in_user = current_app.db.users.find_one({'email': current_user})
@@ -281,7 +281,7 @@ class EditUsersView(MethodView):
 class DeleteUserView(MethodView):
     decorators =  [custom_jwt_required()]
     def delete(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
         
@@ -296,7 +296,7 @@ class DeleteUserView(MethodView):
 class GetMediaView(MethodView):
     decorators =  [custom_jwt_required()]
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         logged_in_user = current_app.db.users.find_one({'email': current_user})
         
@@ -314,11 +314,12 @@ class GetMediaView(MethodView):
 class ActionLogsView(MethodView):
     decorators =  [custom_jwt_required()]
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         logged_in_user = current_app.db.users.find_one({'email': current_user})
 
         all_logs = list(current_app.db.audit.find({}, {'_id': 0}))
+        print("DSSSSSSSSSSSSSSSSSSD", all_logs)
         for log in all_logs:
             user = current_app.db.users.find_one({'uuid':log['user_id']})
             try:

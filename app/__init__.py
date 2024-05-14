@@ -112,33 +112,14 @@ def create_app(config_name):
         
         else:
             try:
-                payload['timestamp'] = datetime.datetime.now()
-                if payload.get('is_response')  == True:
-                    notification = {
-                        "title": "Admin Response", 
-                        "message": "recived message from admin" , 
-                        "timestamp": datetime.datetime.now(), 
-                        'type':"chat"
-                    }
-                    if app.db.notifications.find_one({'user_id':payload['user_id']}):
-                        app.db.notifications.update_one(
-                            {'user_id': payload["user_id"]},
-                            {"$push": {"notifications": notification}}
-                        )
-                    else:
-                        app.db.notifications.insert_one({
-                            'user_id': payload["user_id"],
-                            "notifications": [notification]
-                        })
-                message_data = payload.copy()
-                message_data.pop('user_id')      
-
+                payload['message_content']['timestamp'] = datetime.datetime.now()
+             
                 existing_document = app.db.messages.find_one({'user_id': payload['user_id']})
 
                 if existing_document:
-                    app.db.messages.update_one({'user_id': payload['user_id']}, {'$push': {'messages': message_data}})
+                    app.db.messages.update_one({'user_id': payload['user_id']}, {'$push': {'messages': payload['message_content']}})
                 else:
-                    app.db.messages.insert_one({'user_id': payload['user_id'], 'messages': [message_data]})
+                    app.db.messages.insert_one({'user_id': payload['user_id'], 'messages': [payload['message_content']]})
             except Exception as e:
                 print("Error in saving user message:", str(e))
 

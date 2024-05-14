@@ -5,8 +5,9 @@ import json
 
 from flask.views import MethodView
 from flask import jsonify, request
-from flask import current_app
+from flask import current_app , url_for
 from flask_jwt_extended import get_jwt_identity
+import werkzeug
 
 from app.services.authentication import custom_jwt_required, log_action
 from app.services.admin import log_request
@@ -15,7 +16,7 @@ from app.services.admin import log_request
 class ChatView(MethodView):
     decorators =  [custom_jwt_required()]
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity() 
         user = current_app.db.users.find_one({'email': current_user})
         
@@ -64,7 +65,7 @@ class ChatView(MethodView):
 class UpdateChatStatus(MethodView):
     decorators =  [custom_jwt_required()]
     def post(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity() 
         logged_in_user = current_app.db.users.find_one({'email': current_user})
         
@@ -84,30 +85,77 @@ class SaveAdminResponseView(MethodView):
     decorators =  [custom_jwt_required()]
     def post(self):
         from app import mqtt_client
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         logged_in_user = current_app.db.users.find_one({'email': current_user})
 
-        data = request.json 
-        message_id = data.get('message_id')
-        message = data.get('message')
+        data = request.form 
+        message_id = logged_in_user['uuid']
+        message = data.get('message', None)
+        file = request.files.get('media_file', None)
         user_id = data.get('user_id')
 
         user = current_app.db.users.find_one({'uuid':user_id})
 
-        if not message_id or not message or not user:
-            return jsonify({"error": "Missing session_id or message or user_id"}), 200
+        if not user:
+            return jsonify({"error": "user not found"}), 200
+        
+        if not message and not file:
+            return jsonify({'message': "Missing message content"})
+        
+        chat_message = {
+            'user_id': user['uuid'],
+            'message_content': 
+                {
+                    'message_id': message_id,
+                    'is_response': True,
+                    'is_seen': False   
+                }
+        }
 
+        if message:
+            chat_message['message_content']['message'] = message
+
+        if file and werkzeug.utils.secure_filename(file.filename):
+            # Check if the file has an allowed extension
+            allowed_extensions = {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}
+            if '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions:
+                org_filename = werkzeug.utils.secure_filename(file.filename)
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                filename = f"{timestamp}_{org_filename}"
+                user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'] ,'customer-support-chat',logged_in_user['uuid'],'uploaded_docs', str(user['uuid']))
+                os.makedirs(user_media_dir, exist_ok=True)
+                user_media_path = os.path.join(user_media_dir, filename)
+                file.save(user_media_path)
+                media_url = url_for('serve_media', filename=os.path.join('customer-support-chat',logged_in_user['uuid'],'uploaded_docs', str(user['uuid']), filename))
+                chat_message['message_content']['media'] = media_url
+                document_data = {
+                    'name': filename,
+                    'url': media_url,
+                    'type': "chat",
+                    'uploaded_at': datetime.now()
+                }
+               
+                # Update the uploaded_documents collection
+                current_app.db.users_uploaded_docs.update_one(
+                    {'uuid': logged_in_user['uuid']},
+                    {'$push': {'uploaded_documents': document_data}},
+                    upsert=True
+                )
+            else:
+                # Handle the case where the file has an invalid extension
+                return jsonify({"error": "Invalid file type. Allowed files are: {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}"}), 200
+        
         mqtt_topic = f"user_chat/{user['email']}"
         mqtt_client.subscribe(mqtt_topic)
 
         # Publish the message to the MQTT topic
         mqtt_client.publish(
             topic=mqtt_topic, 
-            payload=json.dumps(data)
+            payload=json.dumps(chat_message)
         )
 
         mqtt_client.unsubscribe(mqtt_topic)
         
-        log_action(logged_in_user['uuid'],logged_in_user['role'], "responded-chat", data)
+        log_action(logged_in_user['uuid'],logged_in_user['role'], "responded-chat", chat_message)
         return jsonify({"message": "Response received and published successfully"}), 200
