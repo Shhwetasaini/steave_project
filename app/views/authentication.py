@@ -18,7 +18,7 @@ from app.services.authentication import custom_jwt_required, send_otp_via_email,
 
 class RegisterUserView(MethodView):
     def post(self):
-        log_request(request)
+        log_request()
 
         # Determine content type and parse data accordingly
         if request.content_type.startswith('multipart/form-data'):
@@ -94,6 +94,7 @@ class RegisterUserView(MethodView):
                 upsert=True
             )
             send_otp_via_email(new_user['email'], otp, subject='OTP for user verification')
+            new_user.pop('_id')
             log_action(new_user['uuid'],new_user['role'],"registration", new_user)
             return jsonify(
                 {
@@ -106,7 +107,7 @@ class RegisterUserView(MethodView):
 
 class LoginUserView(MethodView):
     def post(self):
-        log_request(request)
+        log_request()
 
         # Determine content type and parse data accordingly
         if request.content_type.startswith('multipart/form-data'):
@@ -145,7 +146,7 @@ class LoginUserView(MethodView):
 
 class UserUuidLoginView(MethodView):
     def post(self):
-        log_request(request)
+        log_request()
 
         # Determine content type and parse data accordingly
         if request.content_type.startswith('multipart/form-data'):
@@ -175,7 +176,7 @@ class UserUuidLoginView(MethodView):
 class ProfileUserView(MethodView):
     decorators = [custom_jwt_required()]
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:
@@ -196,7 +197,7 @@ class ProfileUserView(MethodView):
 
 class UserUUIDView(MethodView):
     def post(self):
-        log_request(request)
+        log_request()
 
         if request.content_type.startswith('multipart/form-data'):
             data = request.form
@@ -221,7 +222,7 @@ class UserUUIDView(MethodView):
 class LogoutUserView(MethodView):
     decorators = [custom_jwt_required()]
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         try:
             validate_email(current_user)
@@ -243,7 +244,7 @@ class LogoutUserView(MethodView):
 class UpdateUsersView(MethodView):
     decorators = [custom_jwt_required()]
     def put(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:

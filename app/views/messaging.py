@@ -14,14 +14,15 @@ from app.services.authentication import custom_jwt_required , log_action
 
 
 class SaveUserMessageView(MethodView):
-    decorators=[custom_jwt_required()]
+    decorators = [custom_jwt_required()]
 
     def post(self):
         from app import mqtt_client
-        log_request(request)
 
-        data = request.json if request.is_json else request.form
-        message = data.get('message')
+        log_request()
+        data = request.form
+        message = data.get('message', None)
+        file = request.files.get('media_file', None)
         current_user = get_jwt_identity()
 
         try:
@@ -30,18 +31,60 @@ class SaveUserMessageView(MethodView):
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
 
+        if not message and not file:
+            return jsonify({'message': "Missing message content"})
+        
+        chat_message = {
+            'user_id': user['uuid'],
+            'message_content': 
+                {
+                    'message_id': user['uuid'],
+                    'is_response': False,
+                    'is_seen': False   
+                }
+        }
+        if message:
+            chat_message['message_content']['message'] = message
+       
+        if file and werkzeug.utils.secure_filename(file.filename):
+           
+        # Check if the file has an allowed extension
+            allowed_extensions = {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}
+            if '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions:
+                org_filename = werkzeug.utils.secure_filename(file.filename)
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                filename = f"{timestamp}_{org_filename}"
+                user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid']), 'uploaded_docs')
+                os.makedirs(user_media_dir, exist_ok=True)
+                user_media_path = os.path.join(user_media_dir, filename)
+                file.save(user_media_path)
+                media_url = url_for('serve_media', filename=os.path.join('user_docs', str(user['uuid']), 'uploaded_docs', filename))
+                chat_message['message_content']['media'] = media_url
+                document_data = {
+                    'name': filename,
+                    'url': media_url,
+                    'type': "chat",
+                    'uploaded_at': datetime.now()
+                }
+               
+                # Update the uploaded_documents collection
+                current_app.db.users_uploaded_docs.update_one(
+                    {'uuid': user['uuid']},
+                    {'$push': {'uploaded_documents': document_data}},
+                    upsert=True
+                )
+            else:
+                # Handle the case where the file has an invalid extension
+                return jsonify({"error": "Invalid file type. Allowed files are: {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}"}), 200
+        
+
+       
         mqtt_topic = f"user_chat/{user['email']}"
         mqtt_client.subscribe(mqtt_topic)
-
-        if not message:
-            return jsonify({"error": "Missing message"}), 200
-
-        # Publish the message to the MQTT topic
+              
         mqtt_client.publish(
-            topic=mqtt_topic, 
-            payload=json.dumps(
-                {'user_id': user['uuid'], 'message_id': user['uuid'], 'message': message, 'is_response':False, 'is_seen': False}
-            )
+                topic=mqtt_topic,
+                payload=json.dumps(chat_message)
         )
 
         #url = 'http://192.168.38.100:80/api/customers/machinebuilt/'
@@ -67,14 +110,8 @@ class SaveUserMessageView(MethodView):
         #)
 
         mqtt_client.unsubscribe(mqtt_topic)
-        data = {
-            'user_id': user['uuid'], 
-            'message_id': user['uuid'], 
-            'message': message, 
-            'is_response':False, 
-            'is_seen': False
-        }
-        log_action(user['uuid'], user['role'], "customer_support-send_message", data)
+       
+        log_action(user['uuid'], user['role'], "customer_service-send_message", chat_message)
         return jsonify({"message": "Message received and published successfully"}), 200
 
 
@@ -83,7 +120,7 @@ class CheckResponseView(MethodView):
     decorators=[custom_jwt_required()]
 
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         
         try:
@@ -96,7 +133,7 @@ class CheckResponseView(MethodView):
 
         if message_document:
             response = message_document['messages']   #[message['message'] for message in messages]
-            log_action(user['uuid'], user['role'], "viewed-customer_support-chat", None)
+            log_action(user['uuid'], user['role'], "viewed-customer_service-chat", None)
             return jsonify(response), 200
         else:
             return jsonify({"response": "No response found!"}), 200
@@ -106,7 +143,7 @@ class BuyerSellersChatView(MethodView):
     decorators = [custom_jwt_required()]
 
     def get(self, property_id, user_id):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:
@@ -149,7 +186,7 @@ class BuyerSellersChatView(MethodView):
 
     def post(self):
         from app import mqtt_client
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:
@@ -214,7 +251,7 @@ class BuyerSellersChatView(MethodView):
         
         if file and werkzeug.utils.secure_filename(file.filename):
             # Check if the file has an allowed extension
-            allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx'}
+            allowed_extensions = {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}
             if '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions:
                 org_filename = werkzeug.utils.secure_filename(file.filename)
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -240,7 +277,7 @@ class BuyerSellersChatView(MethodView):
                 )
             else:
                 # Handle the case where the file has an invalid extension
-                return jsonify({"error": "Invalid file type. Allowed files are: png, jpg, jpeg, gif, pdf, doc, docx"}), 200
+                return jsonify({"error": "Invalid file type. Allowed files are: {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}"}), 200
 
         if buyer_id == seller_id:
             return jsonify({"error": "Only buyers for this property can chat"}), 200
@@ -264,7 +301,7 @@ class ChatUsersListView(MethodView):
     decorators = [custom_jwt_required()]
 
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:

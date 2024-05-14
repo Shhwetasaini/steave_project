@@ -39,7 +39,7 @@ class PropertyTypeSelectionView(MethodView):
     decorators = [custom_jwt_required()]
 
     def post(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         try:
             validate_email(current_user)
@@ -130,7 +130,7 @@ class PropertyUploadImageView(MethodView):
     decorators = [custom_jwt_required()]
 
     def post(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         try:
             validate_email(current_user)
@@ -217,7 +217,7 @@ class PropertyUploadImageView(MethodView):
 class SavePdfView(MethodView):
     decorators = [custom_jwt_required()]
     def post(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         try:
             validate_email(current_user)

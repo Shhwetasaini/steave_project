@@ -22,7 +22,7 @@ from app.services.admin import (
 class AllDocumentsView(MethodView):
     decorators =  [custom_jwt_required()]
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
         
@@ -34,7 +34,7 @@ class AllDocumentsView(MethodView):
 class EditDocumentsView(MethodView):
     decorators =  [custom_jwt_required()]
     def put(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
       
@@ -79,7 +79,7 @@ class EditDocumentsView(MethodView):
 class FlFormsView(MethodView):
     decorators =  [custom_jwt_required()]
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
         
@@ -93,7 +93,7 @@ class FlFormsView(MethodView):
 class MnFormsView(MethodView):
     decorators =  [custom_jwt_required()]
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
         root_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms')
@@ -105,7 +105,7 @@ class MnFormsView(MethodView):
 class SingleFlFormsView(MethodView):
     decorators =  [custom_jwt_required()]
     def get(self, filename, folder):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
         # Specify the folder path
@@ -126,7 +126,7 @@ class SingleFlFormsView(MethodView):
 class SingleMnFormsView(MethodView):
     decorators =  [custom_jwt_required()]
     def get(self, filename, folder):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
         # Specify the folder path
@@ -148,7 +148,7 @@ class SingleMnFormsView(MethodView):
 class UploadDocumentView(MethodView):
     decorators =  [custom_jwt_required()]
     def post(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
         update_doc = {}
@@ -180,7 +180,7 @@ class UploadDocumentView(MethodView):
 class MoveFlFormsFileView(MethodView):
     decorators =  [custom_jwt_required()]
     def post(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
         try:
@@ -247,7 +247,7 @@ class MoveFlFormsFileView(MethodView):
 class MoveMnFormsFileView(MethodView):
     decorators =  [custom_jwt_required()]
     def post(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
         try:
@@ -313,7 +313,7 @@ class MoveMnFormsFileView(MethodView):
 class DownloadedDocsView(MethodView):
     decorators =  [custom_jwt_required()]
     def get(self, uuid):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         logged_in_user = current_app.db.users.find_one({'email': current_user})
        
@@ -329,7 +329,7 @@ class DownloadedDocsView(MethodView):
 class UploadedDocsView(MethodView):
     decorators =  [custom_jwt_required()]
     def get(self, uuid):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         logged_in_user = current_app.db.users.find_one({'email': current_user})
         user = current_app.db.users.find_one({'uuid': uuid}, {'_id': 0})

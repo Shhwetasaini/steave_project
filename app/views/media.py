@@ -19,7 +19,7 @@ class ReceiveMediaView(MethodView):
     decorators = [custom_jwt_required()]
 
     def post(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         
         try:
@@ -72,7 +72,7 @@ class SendMediaView(MethodView):
     decorators = [custom_jwt_required()]
 
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:
@@ -94,7 +94,7 @@ class DeleteMediaView(MethodView):
     decorators = [custom_jwt_required()]
 
     def delete(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:
@@ -134,7 +134,7 @@ class DownloadDocView(MethodView):
     decorators = [custom_jwt_required()]
     
     def post(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:
@@ -198,7 +198,7 @@ class UploadDocView(MethodView):
     decorators = [custom_jwt_required()]
 
     def put(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:
@@ -245,7 +245,7 @@ class AllDocsView(MethodView):
     decorators = [custom_jwt_required()]
 
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:
@@ -296,7 +296,7 @@ class UserDownloadedDocsView(MethodView):
     decorators = [custom_jwt_required()]
 
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         try:
             validate_email(current_user)
@@ -317,7 +317,7 @@ class UserUploadedDocsView(MethodView):
     decorators = [custom_jwt_required()]
 
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         try:
             validate_email(current_user)

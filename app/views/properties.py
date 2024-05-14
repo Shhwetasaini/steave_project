@@ -23,7 +23,7 @@ class SellerPropertyListView(MethodView):
     decorators = [custom_jwt_required()]
 
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:
@@ -70,7 +70,7 @@ class AllPropertyListView(MethodView):
     decorators = [custom_jwt_required()]
 
     def get(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:
@@ -113,7 +113,7 @@ class AllPropertyListView(MethodView):
 
 class ExternalPropertyAddView(MethodView):
     def post(self):
-        log_request(request)
+        log_request()
         try:
             data = request.json
             print(data,"DATA---------------")
@@ -146,7 +146,7 @@ class ExternalPropertyAddView(MethodView):
 class PropertyUpdateView(MethodView):
     decorators = [custom_jwt_required()]
     def put(self, property_id):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
         try:
             validate_email(current_user)
@@ -237,7 +237,7 @@ class PropertyImageDeleteView(MethodView):
     decorators = [custom_jwt_required()]
     
     def delete(self):
-        log_request(request)
+        log_request()
         current_user = get_jwt_identity()
 
         try:
