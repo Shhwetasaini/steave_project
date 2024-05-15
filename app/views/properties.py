@@ -165,30 +165,37 @@ class PropertyUpdateView(MethodView):
                 'name', 'status', 'address', 'state', 'city',
                 'latitude', 'longitude', 'beds', 'baths', 'kitchen'
             ]
+
+            data = request.form 
             
+            if not data:
+                return jsonify({'error': 'No data in payload'})
+
+            update_data  = {}
             for key, value in request.form.items():
                 if key in updatable_fields:
                     if key == "address":
-                        if property_data[key].isdigit():
+                        
+                        if value.isdigit():
                             return jsonify({'error': 'seller_address and property_type field is required'})
                         
                         # Check if the address contains "US" or "United States" or "États-Unis"
-                        if not re.search(r'\b(US|United States|USA|États-Unis|U\.S\.?)\b', property_data[key], flags=re.IGNORECASE):
+                        if not re.search(r'\b(US|United States|USA|États-Unis|U\.S\.?)\b', value, flags=re.IGNORECASE):
                             return jsonify({'error': 'Please enter a valid address in the United States.'})
                         
                         # Check if seller_property_address is present in e_sign_data and contains mn, minnesota, fl, or florida
-                        if not any(keyword in  property_data[key].lower() for keyword in ['mn', 'minnesota', 'fl', 'florida']):
+                        if not any(keyword in  value.lower() for keyword in ['mn', 'minnesota', 'fl', 'florida']):
                             return jsonify({'error': "The address must be located in Minnesota (MN) or Florida (FL)."})
                         
-                        valid_address = validate_address(property_data[key])
+                        valid_address = validate_address(value)
                         if not valid_address:
                             return jsonify({'error': "Invalid Address. missing country, state or postal_code"})
                         
-                        property_data[key] = value
+                        update_data[key] = value
 
                     elif key in ["price", "longitude", "latitude"]:
                         try:
-                            property_data[key] = float(value)
+                            update_data[key] = float(value)
                         except ValueError:
                             if value.strip() != '':
                                 return jsonify({'error':'only float values are accepted for price, longitude, latitude'})
@@ -196,14 +203,17 @@ class PropertyUpdateView(MethodView):
                     
                     elif key in ["beds", "baths", "kitchen"]:
                         try:
-                            property_data[key] = int(value)
+                            update_data[key] = int(value)
                         except ValueError:
                             if value.strip() != '':
                                 return jsonify({'error':'only integer values are accepted for beds, baths, kitchen'})
-                            pass
-
+                            pass  
+                    
+                    else:
+                        update_data[key] = value
+                
             # Update property document in MongoDB
-            current_app.db.properties.update_one({'_id': ObjectId(property_id)}, {'$set': property_data})
+            current_app.db.properties.update_one({'_id': ObjectId(property_id)}, {'$set': update_data})
             # Add image if provided
             if 'image' in request.files:
                 file = request.files['image']
@@ -220,14 +230,14 @@ class PropertyUpdateView(MethodView):
                 image_path = os.path.join(user_media_dir, org_filename)
                 file.save(image_path)
                 image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), org_filename))
-                property_data.setdefault('images', []).append(image_url)
+                update_data.setdefault('images', []).append(image_url)
                 current_app.db.properties.update_one(
                     {'_id': ObjectId(property_id)},
-                    {'$set': {'images': property_data['images']}}
+                    {'$push': {'images': update_data['images'][0]}}
                 )
             
             property_data['property_id'] = property_id
-            log_action(user['uuid'], user['role'], "updated-property", property_data)
+            log_action(user['uuid'], user['role'], "updated-property", update_data)
             return jsonify({'message': 'Property information updated successfully'}), 200
         else:
             return jsonify({'error': 'User not found'}), 200
