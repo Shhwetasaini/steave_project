@@ -167,8 +167,9 @@ class PropertyUpdateView(MethodView):
             ]
 
             data = request.form 
+            files = request.files.get('image')
             
-            if not data:
+            if not data and not files:
                 return jsonify({'error': 'No data in payload'})
 
             update_data  = {}
