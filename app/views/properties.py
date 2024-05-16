@@ -101,7 +101,13 @@ class AllPropertyListView(MethodView):
                     }
                     prop['owner_info'] = owner_info
                 else:
-                    prop['owner_info'] = None          # External properties
+                    prop['owner_info'] = {
+                        'name': "Customer-Service",
+                        'phone': None,
+                        'email': None,
+                        'profile': None,
+                        'user_id': None
+                    }                          # External properties
                 
                 property_list.append(prop)
             else:
@@ -116,7 +122,6 @@ class ExternalPropertyAddView(MethodView):
         log_request()
         try:
             data = request.json
-            print(data,"DATA---------------")
             property_insert_result = current_app.db.properties.insert_one(data)
             inserted_property_id = str(property_insert_result.inserted_id)
             data['property_id'] =  inserted_property_id

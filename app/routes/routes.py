@@ -63,6 +63,8 @@ api_bp.add_url_rule(rule='/admin/user/uploaded-docs/<uuid>', view_func=UploadedD
 api_bp.add_url_rule(rule='/admin/user/chats', view_func=ChatView.as_view('admin_user_chats'))
 api_bp.add_url_rule(rule='/admin/user/chat-status', view_func=UpdateChatStatus.as_view('admin_user_chat_status'))
 api_bp.add_url_rule(rule='/admin/response', view_func=SaveAdminResponseView.as_view('admin_response'))
+api_bp.add_url_rule(rule='/admin/property/response', view_func=SavePropertyAdminResponseView.as_view('admin_property_resoponse'), methods=['POST'])
+api_bp.add_url_rule(rule='/admin/property/response/<property_id>/<user_id>', view_func=SavePropertyAdminResponseView.as_view('admin_property_messages'), methods=['GET'])
 api_bp.add_url_rule(rule='/admin/documents', view_func=AllDocumentsView.as_view('admin_documents'))
 api_bp.add_url_rule(rule='/admin/flforms', view_func=FlFormsView.as_view('admin_flforms'))
 api_bp.add_url_rule(rule='/admin/mnforms', view_func=MnFormsView.as_view('admin_mnforms'))
@@ -73,8 +75,16 @@ api_bp.add_url_rule(rule='/admin/document/upload', view_func=UploadDocumentView.
 api_bp.add_url_rule(rule='/admin/document/flforms/move', view_func=MoveFlFormsFileView.as_view('admin_document_flforms_move'))
 api_bp.add_url_rule(rule='/admin/document/mnforms/move', view_func=MoveMnFormsFileView.as_view('admin_document_mnforms_move'))
 api_bp.add_url_rule(rule='/admin/user/actions', view_func=ActionLogsView.as_view('admin_user_action'))
+api_bp.add_url_rule(rule='/admin/user/property/chat/list', view_func=UserCustomerPropertyChatUsersListView.as_view('admin_user_property_chat_list'))
+
 
 # Buyers APIs
 api_bp.add_url_rule(rule='/users/buyer/sellers/chat', view_func=BuyerSellersChatView.as_view('buyer_sellers_chat'), methods=['POST'])
 api_bp.add_url_rule(rule='/users/buyer/sellers/chat/<property_id>/<user_id>', view_func=BuyerSellersChatView.as_view('buyer_seller_message'), methods=['GET'])
-api_bp.add_url_rule(rule='/users/chat/list', view_func=ChatUsersListView.as_view('chat_users_list'))
+api_bp.add_url_rule(rule='/users/chat/list', view_func=BuyerSellerChatUsersListView.as_view('buyer_seller_chat_users_list'))
+
+#User-Customer-service property chat apis
+api_bp.add_url_rule(rule='/users/customer/property/chat', view_func=UserCustomerServicePropertySendMesssageView.as_view('user-customer-service_chat'), methods=['POST'])
+api_bp.add_url_rule(rule='/users/customer/property/chat/<property_id>', view_func=UserCustomerServicePropertySendMesssageView.as_view('user-customer-service_message'), methods=['GET'])
+api_bp.add_url_rule(rule='/users/customer/property/chat/list', view_func=UserCustomerServicePropertyChatUserList.as_view('user_customer_property_chat_list'))
+
