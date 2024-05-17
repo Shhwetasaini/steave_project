@@ -80,36 +80,24 @@ def create_app(config_name):
             except Exception as e:
                 print("Error in saving buyer_seller_message:", str(e))
                 
-        
-        elif payload.get('key')== 'seller_property_messaging':
+        elif payload.get('key')== 'user-customer_service-property-chat':
             try:
                 payload.pop('key')
                 payload['message_content'][0]['timestamp'] = datetime.datetime.now()
-                # Extract sender_id and buyer_id from payload
-                buyer_id = payload.get('buyer_id')
-                seller_id = payload.get('seller_id')
-                property_id = payload.get('property_id')
-
-                # Check if a document already exists with the given sender_id and buyer_id
-                existing_message = app.db.seller_property_messaging.find_one({
-                    'buyer_id': buyer_id,
-                    'seller_id': seller_id,
-                    'property_id': property_id
+                existing_document = app.db.users_customer_service_property_chat.find_one({
+                    'user_id': payload['user_id'], 
+                    'property_id':  payload['property_id']
                 })
-
-                if existing_message:
-                    # If a document already exists, update it by pushing the new message content
-                    app.db.seller_property_messaging.update_one(
-                        {'_id': existing_message['_id']},
-                        {'$push': {'message_content': payload['message_content'][0]}}
-                    )
+                if existing_document:
+                    app.db.users_customer_service_property_chat.update_one(
+                        {'_id': existing_document['_id']}, 
+                        {'$push': {'message_content': payload['message_content'][0]}
+                    })
                 else:
-                    # If no document exists, insert a new one
-                    app.db.seller_property_messaging.insert_one(payload)
+                    app.db.users_customer_service_property_chat.insert_one(payload)
             except Exception as e:
-                print("Error in saving seller_buyer_property_message:", str(e))
-
-        
+                print("Error in saving user message:", str(e))
+           
         else:
             try:
                 payload['message_content']['timestamp'] = datetime.datetime.now()
