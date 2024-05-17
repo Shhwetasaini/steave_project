@@ -163,9 +163,9 @@ class PropertyUploadImageView(MethodView):
             return jsonify({'error':'Invalid transaction, transaction already exist for this property'})
         
         uploaded_images = 0
+        image_urls = []
         if images:
             try:
-                image_urls = []
                 for image in images:
                     # Save image and get URL
                     org_filename = secure_filename(image.filename)

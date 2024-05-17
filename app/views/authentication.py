@@ -334,7 +334,7 @@ class ForgetPasswdView(MethodView):
         
         email = data.get('email') or request.form.get('email')
         if not email:
-            jsonify({"error": "Email is missing!"}), 200
+            return jsonify({"error": "Email is missing!"}), 200
         
         user = current_app.db.users.find_one({'email': email})
 
@@ -352,7 +352,7 @@ class ForgetPasswdView(MethodView):
             send_otp_via_email(user['email'], otp, subject='OTP for Password Reset')
             return jsonify({'message': 'OTP sent to your email'}), 200
         else:
-            return  jsonify(), 200
+            return jsonify({"error": "User does not exist"}), 200
 
 
 class ResetPasswdView(MethodView):
@@ -370,10 +370,10 @@ class ResetPasswdView(MethodView):
         confirm_password = data.get('confirm_password')
 
         if not email or not otp_received or not new_password or not confirm_password:
-            return jsonify({"All fields are required"}), 200
+            return jsonify({"error": "All fields are required"}), 200
         
         if new_password != confirm_password:
-            return jsonify({"error": "Both password must be same"}), 200
+            return jsonify({"error": "Both passwords must be the same"}), 200
 
         user = current_app.db.users.find_one({'email': email})       
 
@@ -387,7 +387,7 @@ class ResetPasswdView(MethodView):
                 log_action(user['uuid'], user['role'], "reset-password",  data)
                 return jsonify({'message': 'password reset successfully'}), 200
             else:
-                return jsonify({'message': 'OTP has used or expired'}), 200
+                return jsonify({'message': 'OTP has been used or expired'}), 200
         else:
             return jsonify({'message': 'Invalid OTP or Email'}), 200
 

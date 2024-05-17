@@ -37,14 +37,14 @@ class SaveUserMessageView(MethodView):
         chat_message = {
             'user_id': user['uuid'],
             'message_content': 
-                {
+               [{
                     'message_id': user['uuid'],
                     'is_response': False,
                     'is_seen': False   
-                }
+                }]
         }
         if message:
-            chat_message['message_content']['message'] = message
+            chat_message['message_content'][0]['message'] = message
        
         if file and werkzeug.utils.secure_filename(file.filename):
            
@@ -59,7 +59,7 @@ class SaveUserMessageView(MethodView):
                 user_media_path = os.path.join(user_media_dir, filename)
                 file.save(user_media_path)
                 media_url = url_for('serve_media', filename=os.path.join('user_docs', str(user['uuid']), 'uploaded_docs', filename))
-                chat_message['message_content']['media'] = media_url
+                chat_message['message_content'][0]['media'] = media_url
                 document_data = {
                     'name': filename,
                     'url': media_url,
@@ -128,7 +128,16 @@ class CheckResponseView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
+      
+        if not user:
+            return jsonify({"error":"user not found "})
+        
         # Retrieve messages from MongoDB for the given user_id
+        current_app.db.messages.update_one(
+            {'user_id': user['uuid'], 'messages.is_response': True},
+            {'$set': {'messages.$[elem].is_seen': True}},
+            array_filters=[{'elem.is_response': True}]
+        )
         message_document = current_app.db.messages.find_one({'user_id': user['uuid'] }, {'_id': 0})
 
         if message_document:
@@ -364,6 +373,13 @@ class UserCustomerServicePropertySendMesssageView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
+
+        #updating message status
+        current_app.db.users_customer_service_property_chat.update_one(
+            {'user_id':  user['uuid'], 'property_id': property_id, 'message_content.is_response': True},
+            {'$set': {'message_content.$[elem].is_seen': True}},
+            array_filters=[{'elem.is_response': True}]
+        )
         
         # Retrieve messages from MongoDB for the given user_id
         message_document = current_app.db.users_customer_service_property_chat.find_one({

@@ -181,14 +181,16 @@ class DownloadDocView(MethodView):
         if existing_document:
             current_app.db.users_downloaded_docs.update_one(
                 query,
-                {'$set': {'downloaded_documents.$.is_signed': document_data['is_signed']}}
+                {'$set': {'downloaded_documents.$.downloaded_at': document_data['downloaded_at']}}
             )
             log_action(user['uuid'], user['role'], "downloaded-document", document_data)
             return jsonify({"message": "Document already exists for the user. Updated."}), 200
         else:
-            # Add the new document to the user's downloaded_documents field
-            current_app.db.users_downloaded_docs.insert_one(
-                {'uuid': user['uuid'], 'downloaded_documents':[document_data]}
+            
+            current_app.db.users_downloaded_docs.update_one(
+                {'uuid': user['uuid']}, 
+                {'$push': { 'downloaded_documents':document_data}},
+               upsert=True
             )
             log_action(user['uuid'], user['role'], "downloaded-document", document_data)
             return jsonify({"message": "Document successfully added to user's documents"}), 200
@@ -304,14 +306,17 @@ class UserDownloadedDocsView(MethodView):
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
         if user:
-            user_docs = current_app.db.users_downloaded_docs.find_one({'uuid': user['uuid']}, {'downloaded_documents': 1, '_id': 0})
+            user_docs = current_app.db.users_downloaded_docs.find_one(
+                {'uuid': user['uuid']},
+                {'downloaded_documents': 1, '_id': 0}
+            )
             if not user_docs:
                 return jsonify([]), 200
+          
             log_action(user['uuid'], user['role'], "viewed-downloaded-docs", None)
             return jsonify(user_docs['downloaded_documents']), 200
         else:
             return jsonify({'error': 'User not found'}), 200
-
 
 class UserUploadedDocsView(MethodView):
     decorators = [custom_jwt_required()]

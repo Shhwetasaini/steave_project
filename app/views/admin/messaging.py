@@ -105,16 +105,16 @@ class SaveAdminResponseView(MethodView):
         
         chat_message = {
             'user_id': user['uuid'],
-            'message_content': 
+            'message_content': [
                 {
                     'message_id': message_id,
                     'is_response': True,
                     'is_seen': False   
-                }
+                }]
         }
 
         if message:
-            chat_message['message_content']['message'] = message
+            chat_message['message_content'][0]['message'] = message
 
         if file and werkzeug.utils.secure_filename(file.filename):
             # Check if the file has an allowed extension
@@ -128,7 +128,7 @@ class SaveAdminResponseView(MethodView):
                 user_media_path = os.path.join(user_media_dir, filename)
                 file.save(user_media_path)
                 media_url = url_for('serve_media', filename=os.path.join('customer-support-chat',logged_in_user['uuid'],'uploaded_docs', str(user['uuid']), filename))
-                chat_message['message_content']['media'] = media_url
+                chat_message['message_content'][0]['media'] = media_url
                 document_data = {
                     'name': filename,
                     'url': media_url,

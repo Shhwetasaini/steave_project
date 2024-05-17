@@ -100,14 +100,17 @@ def create_app(config_name):
            
         else:
             try:
-                payload['message_content']['timestamp'] = datetime.datetime.now()
+                payload['message_content'][0]['timestamp'] = datetime.datetime.now()
              
                 existing_document = app.db.messages.find_one({'user_id': payload['user_id']})
 
                 if existing_document:
-                    app.db.messages.update_one({'user_id': payload['user_id']}, {'$push': {'messages': payload['message_content']}})
+                    app.db.messages.update_one({'user_id': payload['user_id']}, {'$push': {'messages': payload['message_content'][0]}})
                 else:
-                    app.db.messages.insert_one({'user_id': payload['user_id'], 'messages': [payload['message_content']]})
+                    messages = payload['message_content']
+                    payload.pop('message_content')
+                    payload['messages'] = messages
+                    app.db.messages.insert_one(payload)
             except Exception as e:
                 print("Error in saving user message:", str(e))
 
