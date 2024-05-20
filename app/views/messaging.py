@@ -339,6 +339,7 @@ class BuyerSellerChatUsersListView(MethodView):
                 receiver['first_name'] = seller.get('first_name') if seller else None
                 receiver['profile_pic'] = seller.get('profile_pic') if seller else None
                 receiver['user_id'] = receiver.pop('seller_id')
+                receiver['time'] = datetime.now().strftime("%Y%m%d%H%M%S")
                
             log_action(user['uuid'], user['role'], "viwed-chat_users", None)
             return jsonify(receivers), 200
@@ -356,6 +357,7 @@ class BuyerSellerChatUsersListView(MethodView):
                 receiver['first_name'] = buyer.get('first_name') if buyer else None
                 receiver['profile_pic'] = buyer.get('profile_pic') if buyer else None
                 receiver['user_id'] = receiver.pop('buyer_id')
+                receiver['time'] = datetime.now().strftime("%Y%m%d%H%M%S")
             
             log_action(user['uuid'], user['role'], "viwed-chat_users", None)    
             return jsonify(receivers), 200
