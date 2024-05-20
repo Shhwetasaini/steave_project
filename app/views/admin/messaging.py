@@ -13,76 +13,67 @@ from app.services.authentication import custom_jwt_required, log_action
 from app.services.admin import log_request
 
 
-class ChatView(MethodView):
-    decorators =  [custom_jwt_required()]
+class UserCustomerChatUsersListView(MethodView):
+    decorators = [custom_jwt_required()]
+
     def get(self):
         log_request()
-        current_user = get_jwt_identity() 
+        current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
+      
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        receivers = list(current_app.db.messages.find({},{'_id': 0}).sort('_id', -1))
         
-        users_cursor = current_app.db.users.find({}, {'_id': False, 'password': False})
-        users = list(users_cursor)
-        for user in users:
-            messages = current_app.db.messages.find_one({'user_id':user['uuid']}, {'_id':0, 'messages': 1})
-            user["chats"] = messages if messages else None
-            pipeline = [
-                {
-                    "$match": {
-                        "user_id": user['uuid']
-                    }
-                },
-                {
-                    "$unwind": "$messages"
-                },
-                {
-                    "$match": {
-                        "messages.is_seen": False, 
-                        "messages.is_response":False
-                    }
-                },
-                {
-                    "$group": {
-                        "_id": "$_id",
-                        "user_id": { "$first": "$user_id" },
-                        "messages": { "$push": "$messages" }
-                    }
-                }
-            ]
-
-            unseen_messages = list(current_app.db.messages.aggregate(pipeline))
-            
-            if unseen_messages:
-                user["unseen_msg"] = unseen_messages[0]
-                del user['unseen_msg']['_id']
-                user["latest_chat"] = unseen_messages[0]['messages'][-1]
-            else:
-                user["unseen_msg"] = None
-                user["latest_chat"] = None 
-        log_action(user['uuid'], user['role'], "viewed-chats", None)
-        return jsonify(users), 200
-
-
-class UpdateChatStatus(MethodView):
-    decorators =  [custom_jwt_required()]
-    def post(self):
-        log_request()
-        current_user = get_jwt_identity() 
-        logged_in_user = current_app.db.users.find_one({'email': current_user})
-        
-        data = request.json
-        email = data.get('email')
-        user = current_app.db.users.find_one({'email': email})
-        current_app.db.messages.update_one(
-            {'user_id': user['uuid'], 'messages.is_response': False},
-            {'$set': {'messages.$[elem].is_seen': True}},
-            array_filters=[{'elem.is_response': False}]
-        )
-        log_action(logged_in_user['uuid'],logged_in_user['role'],"viewed-message", data)
-        return jsonify({"message":"successfully updated!"}), 200
+        if len(receivers) != 0:  
+            for receiver in receivers:
+                chat_user = current_app.db.users.find_one({'uuid': receiver['user_id']})
+                if not chat_user:
+                    return jsonify({'error': 'Chat user not found'}), 404
+                
+                unseen_message_count = len(list(filter(lambda msg: not msg.get("is_response") and not msg.get("is_seen"), receiver['messages'])))
+                receiver['unseen_message_count'] = unseen_message_count
+                receiver['name'] = chat_user['first_name'] + ' ' + chat_user['last_name'] 
+                receiver['email'] = chat_user['email']
+                receiver.pop('messages')
+                
+            log_action(user['uuid'], user['role'], "viwed-customer-chat-users", None)
+            return jsonify(receivers), 200
+        return jsonify([])
 
 
 class SaveAdminResponseView(MethodView):
     decorators =  [custom_jwt_required()]
+
+    def get(self, user_id):
+        log_request()
+        current_user = get_jwt_identity()
+        admin_user = current_app.db.users.find_one({'email': current_user})
+        user = current_app.db.users.find_one({'uuid': user_id})
+        
+        if not user or not admin_user:
+            return jsonify({"error": "User not found!"}), 404
+
+        #updating message status
+        current_app.db.messages.update_one(
+            {'user_id': user_id, 'messages.is_response': False},
+            {'$set': {'messages.$[elem].is_seen': True}},
+            array_filters=[{'elem.is_response': False}]
+        )
+        
+        # Retrieve messages from MongoDB for the given user_id
+        message_document = current_app.db.messages.find_one({
+            'user_id': user['uuid']
+        }, {'_id': 0})
+
+        if message_document:
+            response = message_document['messages']   
+            log_action(admin_user['uuid'], admin_user['role'], "viewed-customer_service-chat", {'user_id':user_id})
+            return jsonify(response), 200
+        else:
+            return jsonify([]), 200
+        
     def post(self):
         from app import mqtt_client
         log_request()
@@ -94,11 +85,10 @@ class SaveAdminResponseView(MethodView):
         message = data.get('message', None)
         file = request.files.get('media_file', None)
         user_id = data.get('user_id')
-
         user = current_app.db.users.find_one({'uuid':user_id})
 
         if not user:
-            return jsonify({"error": "user not found"}), 200
+            return jsonify({"error": "user not found"}), 404
         
         if not message and not file:
             return jsonify({'message': "Missing message content"})
@@ -144,7 +134,7 @@ class SaveAdminResponseView(MethodView):
                 )
             else:
                 # Handle the case where the file has an invalid extension
-                return jsonify({"error": "Invalid file type. Allowed files are: {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}"}), 200
+                return jsonify({"error": "Invalid file type. Allowed files are: {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}"}), 400
         
         mqtt_topic = f"user_chat/{user['email']}"
         mqtt_client.subscribe(mqtt_topic)
@@ -171,7 +161,7 @@ class SavePropertyAdminResponseView(MethodView):
         user = current_app.db.users.find_one({'uuid': user_id})
         
         if not user or not admin_user:
-            return jsonify({"error": "User not found!"}), 200
+            return jsonify({"error": "User not found!"}), 404
 
         #updating message status
         current_app.db.users_customer_service_property_chat.update_one(
@@ -191,7 +181,7 @@ class SavePropertyAdminResponseView(MethodView):
             log_action(admin_user['uuid'], admin_user['role'], "viewed-customer_service-property-chat", {'property_id':  property_id, 'user_id':user_id})
             return jsonify(response), 200
         else:
-            return jsonify({"response": "No response found!"}), 200
+            return jsonify([]), 200
 
     def post(self):
         from app import mqtt_client
@@ -262,7 +252,7 @@ class SavePropertyAdminResponseView(MethodView):
                 # Handle the case where the file has an invalid extension
                 return jsonify({"error": "Invalid file type. Allowed files are: png, jpg, jpeg, gif, pdf, doc, docx"}), 400
 
-        mqtt_topic = f"user_customer_service-property-chat/{user['email']}/{property_id}"
+        mqtt_topic = f"user_customer_service_property_chat/{user['email']}/{property_id}"
         mqtt_client.subscribe(mqtt_topic)
         
         #Publish the message to the MQTT topic
@@ -272,7 +262,7 @@ class SavePropertyAdminResponseView(MethodView):
         )
         mqtt_client.unsubscribe(mqtt_topic)
         log_action(user_admin['uuid'], user_admin['role'], "responded-property-chat", chat_message)
-        return jsonify({"message": "Response received and published successfully"}), 400
+        return jsonify({"message": "Response received and published successfully"}), 200
 
 
 class UserCustomerPropertyChatUsersListView(MethodView):
@@ -284,7 +274,7 @@ class UserCustomerPropertyChatUsersListView(MethodView):
         user = current_app.db.users.find_one({'email': current_user})
       
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
 
         receivers = list(current_app.db.users_customer_service_property_chat.find({},{'_id': 0}).sort('_id', -1))
         
@@ -292,7 +282,7 @@ class UserCustomerPropertyChatUsersListView(MethodView):
             for receiver in receivers:
                 chat_user = current_app.db.users.find_one({'uuid': receiver['user_id']})
                 if not chat_user:
-                    return jsonify({'error': 'Chat user not found'}), 200
+                    return jsonify({'error': 'Chat user not found'}), 404
                 
                 unseen_message_count = len(list(filter(lambda msg: not msg.get("is_response") and not msg.get("is_seen"), receiver['message_content'])))
                 receiver['unseen_message_count'] = unseen_message_count
@@ -302,4 +292,4 @@ class UserCustomerPropertyChatUsersListView(MethodView):
                 
             log_action(user['uuid'], user['role'], "viwed-property-chat-users", None)
             return jsonify(receivers), 200
-        return jsonify([])
+        return jsonify([]), 200

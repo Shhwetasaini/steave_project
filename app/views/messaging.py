@@ -418,7 +418,11 @@ class UserCustomerServicePropertySendMesssageView(MethodView):
             return jsonify({"error": "Missing property_id or address"}), 200
         
         if not message and not file:
-            return jsonify({'message': "Missing message content"}), 200
+            return jsonify({'error': "Missing message content"}), 200
+        
+        property = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': "Customer-Service"})
+        if not property:
+            return jsonify({"error": "Property does not exist"}), 200
         
         chat_message = {
             'user_id': user['uuid'],

@@ -136,7 +136,7 @@ class ExternalPropertyAddView(MethodView):
             lookup_data = {
                 "transaction_id": str(transaction_result.inserted_id),
                 "property_id": inserted_property_id, 
-                "seller_id": "customer_support",
+                "seller_id": "Customer-Service",
                 "realtors": []  
             }
 
