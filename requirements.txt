@@ -1,3 +1,4 @@
+asgiref
 Flask
 Flask-Cors
 pymongo
@@ -12,3 +13,5 @@ phonenumbers
 email-validator
 stripe
 gunicorn
+hypercorn
+uvicorn

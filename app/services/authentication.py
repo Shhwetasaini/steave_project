@@ -1,5 +1,6 @@
 import os
 import random
+import logging
 
 from flask import request, current_app
 from functools import wraps
@@ -18,8 +19,8 @@ def get_session_files(session_id):
     pending_file = os.path.join(current_app.config['CHAT_SESSIONS_FOLDER'], f'{session_id}_pending.txt')
     return received_file, pending_file
 
-def authenticate_request(req: request):
-    auth_header = req.headers.get('Authorization')
+def authenticate_request():
+    auth_header = request.headers.get('Authorization')
     token = auth_header.split(" ")[1] if auth_header else ''
     return token == current_app.config['API_KEY']
 
@@ -39,6 +40,8 @@ def custom_jwt_required():
                     return jsonify({'error':"Authorization token is missing!"}), 200
                 if str(e) ==  'Token has been revoked':
                     return jsonify({'error':"User has been logged out, login again!"}), 200
+                
+                logging.error(str(e))
                 return jsonify({'error': "something wrong"}), 200
             return fn(*args, **kwargs)
         return wrapper

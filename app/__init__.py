@@ -26,15 +26,23 @@ def create_app(config_name):
 
     jwt.init_app(app)
     app.logger.setLevel(logging.INFO) 
-    
-    # Connect to mongoDB
-    mongo_client = MongoClient(
-        app.config['DB_HOST'], 
-        app.config['DB_PORT'], 
-        username=app.config['DB_USER'], 
-        password=app.config['DB_PASSWD']
-    )
-    app.db = mongo_client.get_database(app.config['DB_NAME'])
+
+    # Set the logging level for PyMongo to ERROR
+    logging.getLogger('pymongo').setLevel(logging.ERROR)
+
+    try:
+        # Connect to MongoDB
+        mongo_client = MongoClient(
+            app.config['DB_HOST'], 
+            app.config['DB_PORT'], 
+            username=app.config['DB_USER'], 
+            password=app.config['DB_PASSWD']
+        )
+        # Get the database
+        app.db = mongo_client.get_database(app.config['DB_NAME'])
+    except Exception as e:
+        # Log the error
+        app.logger.error(f"Failed to connect to MongoDB: {e}")
 
     jwt.token_in_blocklist_loader(check_if_token_revoked)
 
@@ -134,8 +142,3 @@ def create_app(config_name):
     app.register_blueprint(api_bp)
 
     return app
-
-
-config_name = os.getenv('CONFIG', 'development')
-
-app = create_app(config_name)
