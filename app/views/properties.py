@@ -113,7 +113,7 @@ class AllPropertyListView(MethodView):
             else:
                 continue  # Invalid/Incomplete transaction properties
         
-        log_action(user['uuid'],user['role'], "viewed-allproperties", None)     
+        log_action(user['uuid'],user['role'], "viewed-all-properties", None)     
         return jsonify(property_list), 200
 
 

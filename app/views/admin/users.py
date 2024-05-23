@@ -15,6 +15,13 @@ from app.services.authentication import custom_jwt_required , log_action
 from app.services.admin import log_request
 
 
+class TokenCheckView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def get(self):
+        return jsonify({'message': 'Token is valid'}), 200
+
+
 class DashboardView(MethodView):
     decorators =  [custom_jwt_required()]
 
@@ -312,19 +319,30 @@ class GetMediaView(MethodView):
 
 
 class ActionLogsView(MethodView):
-    decorators =  [custom_jwt_required()]
+    decorators = [custom_jwt_required()]
+
     def get(self):
         log_request()
-        current_user = get_jwt_identity()
-        logged_in_user = current_app.db.users.find_one({'email': current_user})
 
-        all_logs = list(current_app.db.audit.find({}, {'_id': 0}))
-        print("DSSSSSSSSSSSSSSSSSSD", all_logs)
+        pipeline = [
+            {
+                "$project": {
+                    "_id": 0,
+                    "user_id": 1,
+                    "user_role": 1,
+                    "logs": { "$sortArray": { "input": "$logs", "sortBy": { "timestamp": -1 } } }
+                }
+            }
+        ]
+
+        all_logs = list(current_app.db.audit.aggregate(pipeline))
+        
+        # Filter logs where user does not exist
+        all_logs_with_users = []
         for log in all_logs:
-            user = current_app.db.users.find_one({'uuid':log['user_id']})
-            try:
-                log['email'] = user['email']
-            except TypeError:
-                continue
-        log_action(logged_in_user['uuid'], logged_in_user['role'], "viewed-actions", None)
-        return jsonify(all_logs), 200
+            user = current_app.db.users.find_one({'uuid': log['user_id']})
+            if user:
+                log['email'] = user.get('email')
+                all_logs_with_users.append(log)
+            
+        return jsonify(all_logs_with_users), 200

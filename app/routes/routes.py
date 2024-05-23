@@ -6,8 +6,8 @@ from app.views.media import *
 from app.views.properties import *
 from app.views.admin.documents import *
 from app.views.admin.messaging import *
-from app.views.admin.users  import *
-
+from app.views.admin.users import *
+from app.views.admin.context_processors import *
 
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -50,6 +50,8 @@ api_bp.add_url_rule(rule='user/properties/add/external', view_func=ExternalPrope
 
 
 # Admin UI APIs
+api_bp.add_url_rule(rule='/admin/context-processor', view_func=ContextProcessorsDataView.as_view('admin_context_processor'))
+api_bp.add_url_rule(rule='/admin/check-token', view_func=TokenCheckView.as_view('admin_check_token'))
 api_bp.add_url_rule(rule='/admin/dashboard', view_func=DashboardView.as_view('admin_dashboard'))
 api_bp.add_url_rule(rule='/admin/users', view_func=AllUserView.as_view('users'))
 api_bp.add_url_rule(rule='/admin/user/register', view_func=AdminRegisterUserView.as_view('admin_user_register'))
