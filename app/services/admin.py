@@ -88,6 +88,7 @@ def update_files_in_documents_db():
                                         'added_at': datetime.now(),
                                         'preview_image': preview_page_url,
                                         'description': "",
+                                        'folder': folder,
                                         'type': forms_type
                                     }
                                     current_app.db.documents.insert_one(document_data)

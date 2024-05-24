@@ -78,6 +78,8 @@ api_bp.add_url_rule(rule='/admin/document/flforms/move', view_func=MoveFlFormsFi
 api_bp.add_url_rule(rule='/admin/document/mnforms/move', view_func=MoveMnFormsFileView.as_view('admin_document_mnforms_move'))
 api_bp.add_url_rule(rule='/admin/user/actions', view_func=ActionLogsView.as_view('admin_user_action'))
 api_bp.add_url_rule(rule='/admin/user/property/chat/list', view_func=UserCustomerPropertyChatUsersListView.as_view('admin_user_property_chat_list'))
+api_bp.add_url_rule(rule='/admin/forms/question', view_func=SingleFormQuestionAddView.as_view('admin_forms_question'))
+
 
 
 # Buyers APIs

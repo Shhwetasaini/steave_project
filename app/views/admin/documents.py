@@ -100,7 +100,7 @@ class MnFormsView(MethodView):
         folders_and_files = get_folders_and_files(root_dir)
         log_action(user['uuid'], user['role'], "viewed-ML-forms", None)
         return jsonify(folders_and_files), 200
-       
+
 
 class SingleFlFormsView(MethodView):
     decorators =  [custom_jwt_required()]
@@ -115,6 +115,8 @@ class SingleFlFormsView(MethodView):
             # Query MongoDB collection for the document object
             document = current_app.db.documents.find_one({'name': filename},  {'_id': 0})
             if document:
+                filepath = os.path.join(folder_path, filename)
+                print(document, "DFGHJGGFDS")
                 log_action(user['uuid'], user['role'], "viewed-single-FL-forms", {'filename':f"{folder_path}/{filename}"})
                 return jsonify(document), 200
             else:
@@ -151,7 +153,6 @@ class UploadDocumentView(MethodView):
         log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
-        update_doc = {}
 
         data = request.form
         folder_type = data.get('folder_type')
@@ -171,8 +172,15 @@ class UploadDocumentView(MethodView):
         file_path = os.path.join(file_dir, filename)
         file.save(file_path)
         document_data = update_files_in_documents_db()
-        data['document_data'] = document_data
-        log_action(user['uuid'], user['role'], "uploaded-document", data)
+        document_data.pop('_id')
+        log_data = {
+            "folder_type": folder_type,
+            "existing_folder": folder,
+            "new_folder": new_folder,
+            "file" : file_path,
+            "document_data": document_data
+        }
+        log_action(user['uuid'], user['role'], "uploaded-document", log_data)
         return jsonify({'message': 'File uploaded succesfully'}), 200
         
 
@@ -338,3 +346,44 @@ class UploadedDocsView(MethodView):
             return jsonify(user), 200
         else:
             return jsonify({"error":"User does not exist!"}), 404
+
+
+class SingleFormQuestionAddView(MethodView):
+    decorators =  [custom_jwt_required()]
+    def post(self):
+        log_request()
+        current_user = get_jwt_identity()
+        user = current_app.db.users.find_one({'email': current_user})
+
+        data = request.json
+        folder_type = data.get('type')
+        folder = data.get('folder') 
+        filename = data.get('name')
+        url = data.get('url')
+        questions = data.get('question')
+        
+        try:
+            document  = current_app.db.documents.find_one({'name': filename, 'type': folder_type, 'folder': folder, 'url': url})
+            if not document:
+                return jsonify({'error': 'document not found'}), 404
+            
+            # Update the document with the questions array
+            current_app.db.documents.update_one(
+                {'name': filename, 'type': folder_type, 'folder': folder, 'url': url},
+                {
+                    '$set': {'updated_at': datetime.now()},
+                    '$addToSet': {'questions': {'$each': questions}}
+                }
+            )
+            
+            log_data = {
+                "folder_type": folder_type,
+                "folder": folder,
+                "filename" : filename,
+                "url" : url,
+                "questions": questions
+            }
+            log_action(user['uuid'], user['role'], "added-questions-on-document", log_data)
+            return jsonify({'message': 'File uploaded succesfully'}), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
