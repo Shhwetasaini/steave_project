@@ -387,3 +387,93 @@ class SingleFormQuestionAddView(MethodView):
             return jsonify({'message': 'File uploaded succesfully'}), 200
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+
+class SingleFormQuestionEditView(MethodView):
+    decorators = [custom_jwt_required()]
+    
+    def put(self):
+        log_request()
+        current_user = get_jwt_identity()
+        user = current_app.db.users.find_one({'email': current_user})
+        
+        data = request.json
+        folder_type = data.get('type')
+        folder = data.get('folder') 
+        filename = data.get('name')
+        url = data.get('url')
+        old_question = data.get('oldquestion')
+        new_question = data.get('editquestion')
+
+        print(old_question, new_question)
+        
+        try:
+            document = current_app.db.documents.find_one({'name': filename, 'type': folder_type, 'folder': folder, 'url': url})
+            if not document:
+                return jsonify({'error': 'document not found'}), 200
+            
+            # Update the document with the edited question
+            current_app.db.documents.update_one(
+                {
+                    'name': filename,
+                    'type': folder_type,
+                    'folder': folder,
+                    'url': url,
+                    'questions': old_question
+                },
+                {
+                    '$set': {'questions.$': new_question, 'updated_at': datetime.now()}
+                }
+            )
+            
+            log_data = {
+                "folder_type": folder_type,
+                "folder": folder,
+                "filename" : filename,
+                "url" : url,
+                "old_question": old_question,
+                "new_question": new_question
+            }
+            log_action(user['uuid'], user['role'], "edited-question-on-document", log_data)
+            return jsonify({'message': 'Question edited successfully'}), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+
+class SingleFormQuestionDeleteView(MethodView):
+    decorators = [custom_jwt_required()]
+    
+    def delete(self):
+        log_request()
+        current_user = get_jwt_identity()
+        user = current_app.db.users.find_one({'email': current_user})
+        
+        data = request.json
+        folder_type = data.get('type')
+        folder = data.get('folder') 
+        filename = data.get('name')
+        url = data.get('url')
+        question_to_delete = data.get('delete-user')
+        
+        try:
+            document = current_app.db.documents.find_one({'name': filename, 'type': folder_type, 'folder': folder, 'url': url})
+            if not document:
+                return jsonify({'error': 'document not found'}), 200
+            
+            # Delete the specified question from the document
+            current_app.db.documents.update_one(
+                {'name': filename, 'type': folder_type, 'folder': folder, 'url': url},
+                {'$pull': {'questions': question_to_delete}}
+            )
+            
+            log_data = {
+                "folder_type": folder_type,
+                "folder": folder,
+                "filename" : filename,
+                "url" : url,
+                "deleted_question": question_to_delete
+            }
+            log_action(user['uuid'], user['role'], "deleted-question-on-document", log_data)
+            return jsonify({'message': 'Question deleted successfully'}), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500

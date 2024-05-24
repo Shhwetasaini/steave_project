@@ -79,6 +79,8 @@ api_bp.add_url_rule(rule='/admin/document/mnforms/move', view_func=MoveMnFormsFi
 api_bp.add_url_rule(rule='/admin/user/actions', view_func=ActionLogsView.as_view('admin_user_action'))
 api_bp.add_url_rule(rule='/admin/user/property/chat/list', view_func=UserCustomerPropertyChatUsersListView.as_view('admin_user_property_chat_list'))
 api_bp.add_url_rule(rule='/admin/forms/question', view_func=SingleFormQuestionAddView.as_view('admin_forms_question'))
+api_bp.add_url_rule(rule='/admin/forms/question/edit', view_func=SingleFormQuestionEditView.as_view('admin_forms_question_edit'))
+api_bp.add_url_rule(rule='/admin/forms/question/delete', view_func=SingleFormQuestionDeleteView.as_view('admin_forms_question_delete'))
 
 
 

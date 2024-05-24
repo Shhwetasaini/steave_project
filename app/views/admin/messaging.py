@@ -2,6 +2,7 @@ import os
 import hashlib
 from datetime import datetime 
 import json
+from bson import ObjectId
 
 from flask.views import MethodView
 from flask import jsonify, request
@@ -121,6 +122,7 @@ class SaveAdminResponseView(MethodView):
                 chat_message['message_content'][0]['media'] = media_url
                 document_data = {
                     'name': filename,
+                    'username': logged_in_user.get('first_name') + " " + logged_in_user.get('last_name'),
                     'url': media_url,
                     'type': "chat",
                     'uploaded_at': datetime.now()
@@ -198,7 +200,8 @@ class SavePropertyAdminResponseView(MethodView):
         
         user_admin = current_app.db.users.find_one({'email': current_user})
         user = current_app.db.users.find_one({'uuid': user_id})
- 
+        property_details = current_app.db.properties.find_one({'_id': ObjectId(property_id) , 'property_address': property_address})
+        
         if not property_id or not property_address:
             return jsonify({"error": "Missing property id or property address"}), 400
         
@@ -220,6 +223,7 @@ class SavePropertyAdminResponseView(MethodView):
             'key':'user-customer_service-property-chat'     
         }
         
+        
         if message:
             chat_message['message_content'][0]['message'] = message
 
@@ -238,6 +242,8 @@ class SavePropertyAdminResponseView(MethodView):
                 chat_message['message_content'][0]['media'] = media_url
                 document_data = {
                     'name': filename,
+                    'username': user_admin.get('first_name') + " " + user_admin.get('last_name'),
+                    'property_name': property_details.get('name'),
                     'url': media_url,
                     'type': "chat",
                     'uploaded_at': datetime.now()

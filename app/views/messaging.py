@@ -60,8 +60,10 @@ class SaveUserMessageView(MethodView):
                 file.save(user_media_path)
                 media_url = url_for('serve_media', filename=os.path.join('user_docs', str(user['uuid']), 'uploaded_docs', filename))
                 chat_message['message_content'][0]['media'] = media_url
+                
                 document_data = {
                     'name': filename,
+                    'username': user.get('first_name') + " " + user.get('last_name'),
                     'url': media_url,
                     'type': "chat",
                     'uploaded_at': datetime.now()
@@ -225,9 +227,9 @@ class BuyerSellersChatView(MethodView):
             return jsonify({"error": "Missing receiver_id or property_id"}), 200
         
         receiver = current_app.db.users.find_one({'uuid': receiver_id})
-        property = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
+        user_property = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
 
-        if not receiver or not property:
+        if not receiver or not user_property:
             return jsonify({"error": "Receiver or property not found'"}), 200
         
         # Construct chat message document
@@ -273,6 +275,8 @@ class BuyerSellersChatView(MethodView):
                 chat_message['message_content'][0]['media'] = media_url
                 document_data = {
                     'name': filename,
+                    'username': user.get('first_name') + " " + user.get('last_name'),
+                    'property_name': user_property.get('address'),
                     'url': media_url,
                     'type': "chat",
                     'uploaded_at': datetime.now()
@@ -420,8 +424,8 @@ class UserCustomerServicePropertySendMesssageView(MethodView):
         if not message and not file:
             return jsonify({'error': "Missing message content"}), 200
         
-        property = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': "Customer-Service"})
-        if not property:
+        user_property = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': "Customer-Service"})
+        if not user_property:
             return jsonify({"error": "Property does not exist"}), 200
         
         chat_message = {
@@ -453,6 +457,8 @@ class UserCustomerServicePropertySendMesssageView(MethodView):
                 chat_message['message_content'][0]['media'] = media_url
                 document_data = {
                     'name': filename,
+                    'username': user.get('first_name') + " " + user.get('last_name'),
+                    'property_name': user_property.get('name'),
                     'url': media_url,
                     'type': "chat",
                     'uploaded_at': datetime.now()
