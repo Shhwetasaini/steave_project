@@ -289,6 +289,9 @@ class SavePdfView(MethodView):
             doc_url = url_for('serve_media', filename=os.path.join('Home','sign', unique_filename))
 
             document_data = {
+                'user_name':user.get('first_name') +" "+ user.get('last_name'),
+                'property_name':transaction.get('property_data').get('name'),
+                'property_address':transaction.get('property_data').get('address'),
                 'name': unique_filename,
                 'url': doc_url,
                 'type': 'signed_property_contract',

@@ -122,7 +122,7 @@ class SaveAdminResponseView(MethodView):
                 chat_message['message_content'][0]['media'] = media_url
                 document_data = {
                     'name': filename,
-                    'username': logged_in_user.get('first_name') + " " + logged_in_user.get('last_name'),
+                    'sender': logged_in_user.get('first_name') + " " + logged_in_user.get('last_name'),
                     'url': media_url,
                     'type': "chat",
                     'uploaded_at': datetime.now()
@@ -242,8 +242,9 @@ class SavePropertyAdminResponseView(MethodView):
                 chat_message['message_content'][0]['media'] = media_url
                 document_data = {
                     'name': filename,
-                    'username': user_admin.get('first_name') + " " + user_admin.get('last_name'),
+                    'sender': user_admin.get('first_name') + " " + user_admin.get('last_name'),
                     'property_name': property_details.get('name'),
+                    'property_address':property_details.get('address'),
                     'url': media_url,
                     'type': "chat",
                     'uploaded_at': datetime.now()

@@ -63,7 +63,7 @@ class SaveUserMessageView(MethodView):
                 
                 document_data = {
                     'name': filename,
-                    'username': user.get('first_name') + " " + user.get('last_name'),
+                    'sender': user.get('first_name') + " " + user.get('last_name'),
                     'url': media_url,
                     'type': "chat",
                     'uploaded_at': datetime.now()
@@ -275,8 +275,9 @@ class BuyerSellersChatView(MethodView):
                 chat_message['message_content'][0]['media'] = media_url
                 document_data = {
                     'name': filename,
-                    'username': user.get('first_name') + " " + user.get('last_name'),
-                    'property_name': user_property.get('address'),
+                    'sender': user.get('first_name') + " " + user.get('last_name'),
+                    'property_name': user_property.get('name'),
+                    'property_address': user_property.get('address'),
                     'url': media_url,
                     'type': "chat",
                     'uploaded_at': datetime.now()
@@ -457,8 +458,9 @@ class UserCustomerServicePropertySendMesssageView(MethodView):
                 chat_message['message_content'][0]['media'] = media_url
                 document_data = {
                     'name': filename,
-                    'username': user.get('first_name') + " " + user.get('last_name'),
+                    'sender': user.get('first_name') + " " + user.get('last_name'),
                     'property_name': user_property.get('name'),
+                    'property_address':user_property.get('address'),
                     'url': media_url,
                     'type': "chat",
                     'uploaded_at': datetime.now()

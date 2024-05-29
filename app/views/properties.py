@@ -48,6 +48,8 @@ class SellerPropertyListView(MethodView):
             # Fetch property details from properties collection
             property_info = current_app.db.properties.find_one({'_id': ObjectId(property_id)}, {'_id': 0})
             if property_info:
+                if property_info.get('status') == 'cancelled':
+                    continue
                 property_info['property_id'] = property_id
                 owner_info = {
                     'name': user.get('first_name') + " " + user.get('last_name'),
@@ -59,7 +61,7 @@ class SellerPropertyListView(MethodView):
                 property_info['owner_info'] = owner_info
                 property_list.append(property_info)
             else:
-                property_list.append(None)
+                continue
       
         log_action(user['uuid'],user['role'], "viewed-properties", None)
         return jsonify(property_list), 200
@@ -87,6 +89,8 @@ class AllPropertyListView(MethodView):
         for prop in properties:
             lookup_info = current_app.db.property_seller_transaction.find_one({'property_id': str(prop['_id'])})
             if lookup_info: 
+                if prop.get('status') == 'cancelled':
+                    continue
                 property_id = str(prop.pop('_id', None))
                 prop['property_id'] = property_id
                 seller = current_app.db.users.find_one({'uuid': lookup_info['seller_id']})
