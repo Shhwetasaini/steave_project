@@ -15,8 +15,7 @@ from werkzeug.utils import secure_filename
 
 from app.services.admin import log_request
 from app.services.authentication import custom_jwt_required, log_action
-
-from app.services.properties import validate_address
+from app.services.properties import validate_address, save_panoramic_image
 
 
 class SellerPropertyListView(MethodView):
@@ -224,18 +223,20 @@ class PropertyUpdateView(MethodView):
             if 'image' in request.files:
                 file = request.files['image']
                 org_filename = secure_filename(file.filename)
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                filename = f"{timestamp}_{org_filename}"
                 user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id))
                 os.makedirs(user_media_dir, exist_ok=True)
                 
-                if os.path.exists(os.path.join(user_media_dir, org_filename)):
+                if os.path.exists(os.path.join(user_media_dir, filename)):
                     return jsonify({'error': 'File with the same name already exists in the folder'}), 200
                 # Check if image with same name already exists in database
                 if any(org_filename == image_name for image_name in [image.split('/')[-1] for image in property_data.get('images', [])]):
                     return jsonify({'error': 'File with the same name already exists in the database'}), 200
                 
-                image_path = os.path.join(user_media_dir, org_filename)
+                image_path = os.path.join(user_media_dir, filename)
                 file.save(image_path)
-                image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), org_filename))
+                image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), filename))
                 update_data.setdefault('images', []).append(image_url)
                 current_app.db.properties.update_one(
                     {'_id': ObjectId(property_id)},
@@ -248,6 +249,220 @@ class PropertyUpdateView(MethodView):
         else:
             return jsonify({'error': 'User not found'}), 200
 
+class PanoramicImageView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def post(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try: 
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 200
+
+        if 'panoramic_image' not in request.files:
+            return jsonify({"error": "No image part"}), 200
+
+        panoramic_image = request.files.get('panoramic_image')
+        property_id = request.form.get('property_id')
+        property_version = request.form.get('property_version')
+        order = request.form.get('order')
+        room_label = request.form.get('room_label')
+        latitude = request.form.get('geo_location_latitude')
+        longitude = request.form.get('geo_location_longitude')
+
+        missing_fields = [field for field, value in {'property_id': property_id,'property_version': property_version,'order': order,'room_label': room_label,'latitude': latitude,'longitude': longitude}.items() if not value]
+
+        if missing_fields:
+            return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 200
+
+        try:
+            property_version = int(property_version)
+        except ValueError:
+            return jsonify({"error": "Invalid property_version value, must be an integer"}), 200
+        try:
+            order = int(order)
+        except ValueError:
+            return jsonify({"error": "Invalid order value, must be an integer"}), 200
+        try:
+            latitude = float(latitude)
+        except ValueError:
+            return jsonify({"error": "Invalid latitude value, must be a float"}), 200
+        try:
+            longitude = float(longitude)
+        except ValueError:
+            return jsonify({"error": "Invalid longitude value, must be a float"}), 200
+
+        user_property = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
+        seller_transaction_property = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
+        if not user_property or not seller_transaction_property:
+            return jsonify({"error": "Property not found"}), 200
+
+        panoramic_images = user_property.get('panoramic_images', [])
+        existing_versions = [pano.get('property_version') for pano in panoramic_images]
+
+        if not existing_versions and property_version != 1:
+            return jsonify({'error': 'Invalid property_version. Start from 1.'}), 200
+
+        if existing_versions:
+            max_existing_version = max(existing_versions)
+            if property_version not in existing_versions and property_version != max_existing_version + 1:
+                return jsonify({'error': f'Invalid property_version. The next version should start from {max_existing_version + 1}.'}), 200
+
+        property_version_images = next((pano for pano in panoramic_images if pano.get('property_version') == property_version), None)
+        
+        image_data = save_panoramic_image(panoramic_image=panoramic_image, user=user, property_id=property_id)
+        if 'error' in image_data:
+            return jsonify({'error': image_data.get('error')})
+        if property_version_images:
+            current_orders = [img['order'] for img in property_version_images.get('3d_images', [])]
+
+            existing_image = next((img for img in property_version_images['3d_images'] if img['order'] == order), None)
+            if existing_image:
+                return jsonify({'error': "panoramic Image already exists for this order, delete it first"}), 200
+
+            else:
+                
+                # Add new image to the existing property version
+                if current_orders and order != max(current_orders) + 1:
+                    return jsonify({"error": f"Wrong Order Value, Order value should start from {max(current_orders) + 1}"}), 200
+                new_image = {
+                    "order": order,
+                    "room_label": room_label,
+                    "name": image_data.get('filename'),
+                    "url": image_data.get('image_url'),
+                    "geo_location_latitude": latitude,
+                    "geo_location_longitude": longitude,
+                    "uploaded_at": datetime.now(),
+                }
+                current_app.db.properties.update_one(
+                    {"_id": ObjectId(property_id), "panoramic_images.property_version": property_version},
+                    {"$push": {"panoramic_images.$.3d_images": new_image}}
+                )
+
+                log_action(user['uuid'], user['role'], "uploaded-panoramic-images", new_image)
+                return jsonify({'message': "panoramic Image details added successfully"}), 200
+
+        else:
+            # Creating a new property version
+            if order != 1:
+                return jsonify({'error': 'Wrong Order Value, Order value should start from 1'}), 200
+
+            new_property_version_images = {
+                'property_version': property_version,
+                '3d_images': [{
+                    "order": order,
+                    "room_label": room_label,
+                    "name": image_data.get('filename'),
+                    "url": image_data.get('image_url'),
+                    "geo_location_latitude": latitude,
+                    "geo_location_longitude": longitude,
+                    "uploaded_at": datetime.now(),
+                }]
+            }
+            current_app.db.properties.update_one(
+                {'_id': ObjectId(property_id)},
+                {'$push': {'panoramic_images': new_property_version_images}}
+            )
+            
+            log_action(user['uuid'], user['role'], "uploaded-panoramic-images", new_property_version_images)
+            return jsonify({"message": "Panoramic Image uploaded successfully"}), 200
+
+    def get(self, property_id):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 200
+
+        logging.info(f"Fetching all panoramic images for property ID: {property_id}")
+        user_property = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
+        seller_transaction_property = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
+        if not user_property or not seller_transaction_property:
+            return jsonify({"error": "Property not found"}), 200
+        
+        panoramas = user_property.get('panoramic_images', [])
+        sorted_panoramas = []
+        for panorama in panoramas:
+            sorted_panoramas.append({
+                'property_version': panorama['property_version'],
+                '3d_images': sorted(panorama['3d_images'], key=lambda x: x['order'])
+            })
+
+        log_action(user['uuid'], user['role'], "viewed-panoramic-images", None)
+        return jsonify(sorted_panoramas), 200
+    
+    def delete(self, property_id, property_version, order):
+        log_request()
+        current_user = get_jwt_identity()
+        
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 200
+
+        if user.get('role') == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 200
+        
+        property_version = int(property_version)
+        order = int(order)
+
+        user_property = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
+        seller_transaction_property = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
+        if not all([user_property, seller_transaction_property]):
+            return jsonify({"error": "Property not found"}), 200
+        
+        panoramic_images = user_property.get('panoramic_images', [])
+        
+        property_version_exists = False
+        order_exists = False
+        updated_panoramic_images = []
+
+        for panorama in panoramic_images:
+            if panorama.get('property_version') == property_version:
+                property_version_exists = True
+                updated_3d_images = [img for img in panorama.get('3d_images', []) if img.get('order') != order]
+                if len(updated_3d_images) < len(panorama.get('3d_images', [])):
+                    order_exists = True
+                if updated_3d_images:
+                    panorama['3d_images'] = updated_3d_images
+                    updated_panoramic_images.append(panorama)
+                else:
+                    current_app.db.properties.update_one(
+                        {"_id": ObjectId(property_id)},
+                        {"$pull": {"panoramic_images": {"property_version": property_version}}}
+                    )
+            else:
+                updated_panoramic_images.append(panorama)
+
+        if not property_version_exists:
+            return jsonify({'error': "property_version does not exist"}), 200
+
+        if not order_exists:
+            return jsonify({'error': "order does not exist in the specified property_version"}), 200
+
+        current_app.db.properties.update_one(
+            {"_id": ObjectId(property_id)},
+            {"$set": {"panoramic_images": updated_panoramic_images}}
+        )
+
+        log_action(user['uuid'], user['role'], "deleted-panoramic-images", {"property_id": property_id, "property_version": property_version, "order": order})
+        return jsonify({"message": "Panoramic image deleted successfully"}), 200
 
 class PropertyImageDeleteView(MethodView): 
     decorators = [custom_jwt_required()]

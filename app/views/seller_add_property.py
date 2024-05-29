@@ -91,7 +91,8 @@ class PropertyTypeSelectionView(MethodView):
             "kitchen": int(data.get('kitchen', 0) or 0),
             "description": data.get('description', None),
             "price": float(data.get('price', 0.0) or 0.0),
-            "size": data.get('size', None)
+            "size": data.get('size', None),
+            'panoramic_images':[],
         }
 
         property_id = create_property(property_data)

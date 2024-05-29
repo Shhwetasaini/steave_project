@@ -47,7 +47,9 @@ api_bp.add_url_rule(rule='user/properties', view_func=AllPropertyListView.as_vie
 api_bp.add_url_rule(rule='user/properties/<string:property_id>', view_func=PropertyUpdateView.as_view('user_properties_update'))
 api_bp.add_url_rule(rule='user/properties/image/remove', view_func=PropertyImageDeleteView.as_view('user_properties_image_remove'))
 api_bp.add_url_rule(rule='user/properties/add/external', view_func=ExternalPropertyAddView.as_view('user_properties_add_external'))
-
+api_bp.add_url_rule(rule='user/properties/panoramic_images', view_func=PanoramicImageView.as_view('user_properties_add_panoramic_images'))
+api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>', view_func=PanoramicImageView.as_view('user_properties_get_panoramic_images'))
+api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>/<int:property_version>/<int:order>', view_func=PanoramicImageView.as_view('user_properties_delete_panoramic_images'))
 
 # Admin UI APIs
 api_bp.add_url_rule(rule='/admin/context-processor', view_func=ContextProcessorsDataView.as_view('admin_context_processor'))
@@ -78,11 +80,7 @@ api_bp.add_url_rule(rule='/admin/document/flforms/move', view_func=MoveFlFormsFi
 api_bp.add_url_rule(rule='/admin/document/mnforms/move', view_func=MoveMnFormsFileView.as_view('admin_document_mnforms_move'))
 api_bp.add_url_rule(rule='/admin/user/actions', view_func=ActionLogsView.as_view('admin_user_action'))
 api_bp.add_url_rule(rule='/admin/user/property/chat/list', view_func=UserCustomerPropertyChatUsersListView.as_view('admin_user_property_chat_list'))
-api_bp.add_url_rule(rule='/admin/forms/question', view_func=SingleFormQuestionAddView.as_view('admin_forms_question'))
-api_bp.add_url_rule(rule='/admin/forms/question/edit', view_func=SingleFormQuestionEditView.as_view('admin_forms_question_edit'))
-api_bp.add_url_rule(rule='/admin/forms/question/delete', view_func=SingleFormQuestionDeleteView.as_view('admin_forms_question_delete'))
-
-
+api_bp.add_url_rule(rule='/admin/forms/question', view_func=SingleFormQuestionView.as_view('admin_forms_question'))
 
 # Buyers APIs
 api_bp.add_url_rule(rule='/users/buyer/sellers/chat', view_func=BuyerSellersChatView.as_view('buyer_sellers_chat'), methods=['POST'])

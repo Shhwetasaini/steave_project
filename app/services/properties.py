@@ -113,3 +113,19 @@ def validate_address(address):
     except Exception as e:
         pass
     return False
+
+def save_panoramic_image(panoramic_image, user, property_id):
+    org_filename = secure_filename(panoramic_image.filename)
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"{timestamp}_{org_filename}"
+    user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id), 'panoramic_image')
+    os.makedirs(user_media_dir, exist_ok=True)
+
+    if os.path.exists(os.path.join(user_media_dir, filename)):
+        return {'error': 'File with the same name already exists in the folder'}
+       
+    image_path = os.path.join(user_media_dir, filename)
+    panoramic_image.save(image_path)
+    image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), 'panoramic_image', org_filename))
+
+    return {'image_url':image_url, 'filename': filename}

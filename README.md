@@ -1,5 +1,5 @@
 ## App run command
--- uvicorn asgi:asgi_app --workers 4 --host 0.0.0.0 --port <port>
+-- uvicorn asgi:asgi_app --host 0.0.0.0 --port <port>
 ## Database
 --MongoDB
 --db_name =  API
