@@ -144,11 +144,16 @@ class PropertyUploadImageView(MethodView):
 
         data = request.form
         transaction_id = data.get('transaction_id')
+        labels = request.form.getlist('labels')
         images = request.files.getlist("images")
         
-        if not transaction_id:
-            return jsonify({'error':'Missing transacion_id'})
 
+        if not transaction_id or not labels:
+            return jsonify({'error':'Missing transacion_id or label'})
+        
+        if len(labels) != len(images):
+            return jsonify({'error': "label and images should be same length"})
+        
         transaction_data = current_app.db.transaction.find_one({"_id": ObjectId(transaction_id)})
         if not transaction_data:
             return jsonify({'error':'Invalid Transaction'})
@@ -167,7 +172,7 @@ class PropertyUploadImageView(MethodView):
         image_urls = []
         if images:
             try:
-                for image in images:
+                for label,image in zip(labels,images):
                     # Save image and get URL
                     org_filename = secure_filename(image.filename)
                     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -190,7 +195,7 @@ class PropertyUploadImageView(MethodView):
                             filename
                         )
                     )
-                    image_urls.append(image_url)
+                    image_urls.append({'label': label, 'name': filename, 'image_url': image_url})
                 
                 current_app.db.properties.update_one(
                     {"_id": ObjectId(transaction_data['property_data']['property_id'])},
