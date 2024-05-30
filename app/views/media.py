@@ -290,7 +290,7 @@ class AllDocsView(MethodView):
 
         # Retrieve data from MongoDB and return as JSON response
         documents = list(current_app.db.documents.find({}, {"_id": 0}))
-        log_action(user['uuid'], user['uuid'], "viwed-all-document", None)
+        log_action(user['uuid'], user['role'], "viwed-all-document", None)
         return jsonify(documents), 200
 
 
@@ -318,6 +318,7 @@ class UserDownloadedDocsView(MethodView):
         else:
             return jsonify({'error': 'User not found'}), 200
 
+
 class UserUploadedDocsView(MethodView):
     decorators = [custom_jwt_required()]
 
@@ -337,3 +338,62 @@ class UserUploadedDocsView(MethodView):
             return jsonify(user_docs['uploaded_documents']), 200
         else:
             return jsonify({'error': 'User not found'}), 200
+
+
+class DocsDateRangeView(MethodView):
+    decorators = [custom_jwt_required()]
+    
+    def get(self):
+        try:
+            log_request()
+            current_user = get_jwt_identity()
+            try:
+                validate_email(current_user)
+                user = current_app.db.users.find_one({'email': current_user})
+            except EmailNotValidError:
+                user = current_app.db.users.find_one({'uuid': current_user})
+
+            if not user:
+                return jsonify({'error': 'User not found'})
+
+            start_date = request.args.get('start_date')
+            end_date = request.args.get('end_date')
+            doc_type = request.args.get('doc_type')
+
+            if not start_date or not end_date or not doc_type:
+                return jsonify({"error": "Please provide start_date, end_date and doc_type in params"})
+            if doc_type not in ['user-docs', 'all-docs']:
+                return jsonify({"error": "Invalid value provided in params for doc_type"})
+
+            start_date = datetime.fromisoformat(start_date)
+            end_date = datetime.fromisoformat(end_date)
+
+            if doc_type == 'all-docs':
+                documents = list(current_app.db.documents.find(
+                    {
+                        "added_at": {
+                            "$gte": start_date,
+                            "$lte": end_date
+                        }
+                    },
+                    {
+                        '_id': 0
+                    }
+                ))
+            elif doc_type == 'user-docs':
+                documents = list(current_app.db.users_uploaded_docs.find(
+                    {
+                        "uploaded_at": {
+                            "$gte": start_date,
+                            "$lte": end_date
+                        }
+                    },
+                    {
+                        '_id': 0
+                    }
+                ))
+
+            return jsonify(documents)
+        except Exception as e:
+            return jsonify({"error": str(e)})
+            

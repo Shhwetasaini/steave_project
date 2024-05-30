@@ -404,6 +404,7 @@ class SingleFormQuestionView(MethodView):
         folder = data.get('folder') 
         filename = data.get('name')
         url = data.get('url')
+        page = int(data.get('page'))
         question_id = int(data.get('edit_question_id'))
         new_question = data.get('editquestion')
         answer_location = data.get('answer_location')
@@ -414,7 +415,7 @@ class SingleFormQuestionView(MethodView):
                 return jsonify({'error': 'document not found'}), 404
 
             # Find the index of the question to be updated
-            index_to_update = next((i for i, q in enumerate(document['questions']) if q['question_id'] == question_id), None)
+            index_to_update = next((i for i, q in enumerate(document['questions']) if q['question_id'] == question_id and q['page'] == page), None)
             if index_to_update is not None:
                 # Update the question if new_question is provided
                 if new_question:
@@ -445,7 +446,7 @@ class SingleFormQuestionView(MethodView):
 
                 return jsonify({'message': 'Question updated successfully'}), 200
             else:
-                return jsonify({'error': 'question not found'}), 404
+                return jsonify({'error': 'Question not found on this pdf page'}), 404
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
