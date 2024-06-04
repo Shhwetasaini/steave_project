@@ -1,7 +1,7 @@
 import os
 import hashlib
 from datetime import datetime 
-import json
+from bson import ObjectId
 
 from flask.views import MethodView
 from flask import jsonify, request, url_for
@@ -113,7 +113,12 @@ class SingleFlFormsView(MethodView):
         # Check if the file exists in the folder
         if file_exists_in_folder(folder_path, filename):
             # Query MongoDB collection for the document object
-            document = current_app.db.documents.find_one({'name': filename},  {'_id': 0})
+            document = current_app.db.documents.find_one({'name': filename})
+            document['id'] = str(document['_id'])
+            all_questions = list(current_app.db.doc_questions_answers.find({'document_id': document['id']}))
+            questions = [{'question_id': str(doc.pop('_id')), **doc} for doc in all_questions]
+            document['questions'] = questions
+            document.pop('_id')
             if document:
                 filepath = os.path.join(folder_path, filename)
                 log_action(user['uuid'], user['role'], "viewed-single-FL-forms", {'filename':f"{filepath}/{filename}"})
@@ -136,7 +141,12 @@ class SingleMnFormsView(MethodView):
         # Check if the file exists in the folder
         if file_exists_in_folder(folder_path, filename):
             # Query MongoDB collection for the document object
-            document = current_app.db.documents.find_one({'name': filename},  {'_id': 0})
+            document = current_app.db.documents.find_one({'name': filename})
+            document['id'] = str(document['_id'])
+            all_questions = list(current_app.db.doc_questions_answers.find({'document_id': document['id']}))
+            questions = [{'question_id': str(doc.pop('_id')), **doc} for doc in all_questions]
+            document['questions'] = questions
+            document.pop('_id')
             if document:
                 log_action(user['uuid'], user['role'], "viewed-single-ML-forms", {'filename':f"{folder_path}/{filename}"})
                 return jsonify(document), 200
@@ -181,8 +191,7 @@ class UploadDocumentView(MethodView):
         }
         log_action(user['uuid'], user['role'], "uploaded-document", log_data)
         return jsonify({'message': 'File uploaded succesfully'}), 200
-        
-
+       
 
 class MoveFlFormsFileView(MethodView):
     decorators =  [custom_jwt_required()]
@@ -356,43 +365,39 @@ class SingleFormQuestionView(MethodView):
         user = current_app.db.users.find_one({'email': current_user})
 
         data = request.json
-        folder_type = data.get('type')
-        folder = data.get('folder') 
-        filename = data.get('name')
-        url = data.get('url')
-        page = data.get('page')
+        doc_id = data.get('document_id')
         questions = data.get('question')
 
+        if not doc_id or not questions:
+            return jsonify({'error': 'document_id and questions are required'}), 400
+
         try:
-            document  = current_app.db.documents.find_one({'name': filename, 'type': folder_type, 'folder': folder, 'url': url})
+            document = current_app.db.documents.find_one({'_id': ObjectId(doc_id)})
             if not document:
                 return jsonify({'error': 'document not found'}), 404
-            
-            # Handle case where 'questions' array is not yet initialized
-            existing_questions = document.get('questions', [])
-            num = len(existing_questions)
-            
-            # Prepare list to hold new questions
-            new_questions = []
-            # Assign sequential numbers to the new questions and add to new list
-            for i, question in enumerate(questions, start=num + 1):
-                question_data = {'question_id': i, 'question': question, 'page': page}
-                new_questions.append(question_data)
-            
-            # Update the document with the combined questions array
-            current_app.db.documents.update_one(
-                {'name': filename, 'type': folder_type, 'folder': folder, 'url': url},
-                {
-                    '$set': {'updated_at': datetime.now()},
-                    '$addToSet': {'questions': {'$each': new_questions}}
-                }
-            )
 
-            return jsonify({'message': 'Questions added successfully'}), 200
+            db_questions = []
+            for question in questions:
+                question_data = {
+                    'document_id': doc_id,
+                    'text': question,
+                    'answer_locations':[]
+                }
+                db_questions.append(question_data)
+            
+            current_app.db.doc_questions_answers.insert_many(db_questions)
+
+            log_data = {
+                "document_id": doc_id,
+                "questions": questions,
+            }
+
+            log_action(user['uuid'], user['role'], "added-question-on-document", log_data)
+
+            return jsonify({'message': 'questions added successfully'})
 
         except Exception as e:
             return jsonify({'error': str(e)}), 500
-
         
     def put(self):
         log_request()
@@ -400,53 +405,45 @@ class SingleFormQuestionView(MethodView):
         user = current_app.db.users.find_one({'email': current_user})
 
         data = request.json
-        folder_type = data.get('type')
-        folder = data.get('folder') 
-        filename = data.get('name')
-        url = data.get('url')
-        page = int(data.get('page'))
-        question_id = int(data.get('edit_question_id'))
+        question_id = data.get('edit_question_id')
+        doc_id = data.get('document_id')
         new_question = data.get('editquestion')
-        answer_location = data.get('answer_location')
+        currentRect = data.get('currentRect')
 
+        if not doc_id or not question_id:
+            return jsonify({'error': 'document_id and question_id are required'}), 400
+        
         try:
-            document = current_app.db.documents.find_one({'name': filename, 'type': folder_type, 'folder': folder, 'url': url})
+            document = current_app.db.documents.find_one({'_id': ObjectId(doc_id)})
             if not document:
                 return jsonify({'error': 'document not found'}), 404
-
-            # Find the index of the question to be updated
-            index_to_update = next((i for i, q in enumerate(document['questions']) if q['question_id'] == question_id and q['page'] == page), None)
-            if index_to_update is not None:
-                # Update the question if new_question is provided
-                if new_question:
-                    document['questions'][index_to_update]['question'] = new_question
-
-                if answer_location:
-                    # Update or insert answer_location
-                    if 'answer_location' in document['questions'][index_to_update]:
-                        document['questions'][index_to_update]['answer_location'].update(answer_location)
-                    else:
-                        document['questions'][index_to_update]['answer_location'] = answer_location
-
-                # Update the document in the database
-                current_app.db.documents.update_one(
-                    {'_id': document['_id']},
-                    {'$set': {'questions': document['questions'], 'updated_at': datetime.now()}}
+            
+            if new_question:
+                # Update the question in the database
+                current_app.db.doc_questions_answers.update_one(
+                    {'_id': ObjectId(question_id), 'document_id':doc_id},
+                    {'$set': {'text': new_question}}
                 )
+            elif currentRect:
+                question = current_app.db.doc_questions_answers.find_one({'_id': ObjectId(question_id), 'document_id':doc_id})
+                if question:
+                    answer_locations = question.get('answer_locations', [])
+                    current_app.db.doc_questions_answers.update_one(
+                        {'_id': ObjectId(question_id), 'document_id': doc_id},
+                        {'$push': {'answer_locations': {'$each': answer_locations + currentRect}}}
+                    )
 
-                log_data = {
-                    "folder_type": folder_type,
-                    "folder": folder,
-                    "filename": filename,
-                    "url": url,
-                    "new_question": new_question,
-                    "answer_location": answer_location
-                }
-                log_action(user['uuid'], user['role'], "updated-question-on-document", log_data)
+                    log_data = {
+                        "question_id": question_id,
+                        "new_question": new_question,
+                        "document_id": doc_id,
+                        "answer_locations": currentRect
+                    }
 
-                return jsonify({'message': 'Question updated successfully'}), 200
-            else:
-                return jsonify({'error': 'Question not found on this pdf page'}), 404
+                    log_action(user['uuid'], user['role'], "updated-question-on-document", log_data)
+                    return jsonify({'message': 'Question updated successfully'}), 200
+                else:
+                    return jsonify({'error':"Question not found for this documnet"}),400
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
@@ -454,42 +451,28 @@ class SingleFormQuestionView(MethodView):
         log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
-        
         data = request.json
-        folder_type = data.get('type')
-        folder = data.get('folder') 
-        filename = data.get('name')
-        url = data.get('url')
-        question_id_to_delete = int(data.get('delete_question_id'))
-        
+        doc_id = data.get('document_id')
+        question_id = data.get('delete_question_id')
+
+        if not doc_id or not question_id:
+            return jsonify({'error': 'document_id and question_id are required'}), 400
         try:
-            document = current_app.db.documents.find_one({'name': filename, 'type': folder_type, 'folder': folder, 'url': url})
+            document = current_app.db.documents.find_one({'_id': ObjectId(doc_id)})
             if not document:
-                return jsonify({'error': 'document not found'}), 200
+                return jsonify({'error': 'document not found'}), 404
             
-            # Find the index of the question to be deleted
-            index_to_delete = next((i for i, q in enumerate(document['questions']) if q['question_id'] == question_id_to_delete), None)
-            if index_to_delete is not None:
-                # Delete the question from the questions array
-                del document['questions'][index_to_delete]
-                
-                # Update the document in the database
-                current_app.db.documents.update_one(
-                    {'name': filename, 'type': folder_type, 'folder': folder, 'url': url},
-                    {'$set': {'questions': document['questions'], 'updated_at': datetime.now()}}
-                )
-                
-                log_data = {
-                    "folder_type": folder_type,
-                    "folder": folder,
-                    "filename": filename,
-                    "url": url,
-                    "deleted_question_id": question_id_to_delete
-                }
-                log_action(user['uuid'], user['role'], "deleted-question-on-document", log_data)
-                
-                return jsonify({'message': 'Question deleted successfully'}), 200
-            else:
-                return jsonify({'error': 'question not found'}), 404
+            question = current_app.db.doc_questions_answers.find_one({'_id': ObjectId(question_id),  'document_id': doc_id})
+            if not question:
+                return jsonify({'error': 'Question not found'}), 404
+
+            current_app.db.doc_questions_answers.delete_one({'_id': ObjectId(question_id)})
+
+            log_data = {"document_id": doc_id, "deleted_question_id": question_id}
+            
+            log_action(user['uuid'], user['role'], "deleted-question-on-document", log_data)
+
+            return jsonify({'message': 'Question deleted successfully'})
+
         except Exception as e:
             return jsonify({'error': str(e)}), 500
