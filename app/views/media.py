@@ -334,7 +334,7 @@ class UserUploadedDocsView(MethodView):
             user_docs = current_app.db.users_uploaded_docs.find_one({'uuid': user['uuid']}, {'uploaded_documents': 1, '_id': 0})
             if not user_docs:
                 return jsonify([]), 200
-            log_action(user['uuid'], user['role'], "viewed-downloaded-docs", None)
+            log_action(user['uuid'], user['role'], "viewed-uploaded-docs", None)
             return jsonify(user_docs['uploaded_documents']), 200
         else:
             return jsonify({'error': 'User not found'}), 200
@@ -372,28 +372,61 @@ class DocsDateRangeView(MethodView):
                 documents = list(current_app.db.documents.find(
                     {
                         "added_at": {
-                            "$gte": start_date,
-                            "$lte": end_date
+                            "$gt": start_date,
+                            "$lt": end_date
                         }
                     },
                     {
                         '_id': 0
                     }
                 ))
+                
+                log_data = {
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'doc_type': doc_type
+                }
+                log_action(user['uuid'], user['role'], "viewed-uploaded-docs-in-daterange", log_data)
+                return jsonify(documents)
             elif doc_type == 'user-docs':
-                documents = list(current_app.db.users_uploaded_docs.find(
+                pipeline = [
                     {
-                        "uploaded_at": {
-                            "$gte": start_date,
-                            "$lte": end_date
+                        "$match": {
+                            "uuid": user['uuid']
                         }
                     },
                     {
-                        '_id': 0
+                        "$project": {
+                            "_id": 0,
+                            "uploaded_documents": {
+                                "$filter": {
+                                    "input": "$uploaded_documents",
+                                    "as": "doc",
+                                    "cond": {
+                                        "$and": [
+                                            {"$gt": ["$$doc.uploaded_at", start_date]},
+                                            {"$lt": ["$$doc.uploaded_at", end_date]}
+                                        ]
+                                    }
+                                }
+                            }
+                        }
                     }
-                ))
+                ]               
 
-            return jsonify(documents)
+                documents = list(current_app.db.users_uploaded_docs.aggregate(pipeline))
+
+                log_data = {
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'doc_type': doc_type
+                }
+                log_action(user['uuid'], user['role'], "viewed-uploaded-docs-in-daterange", log_data)
+                
+                if documents:
+                    return jsonify(documents[0].get('uploaded_documents'))
+                else:
+                    return jsonify([]) 
         except Exception as e:
             return jsonify({"error": str(e)})
             

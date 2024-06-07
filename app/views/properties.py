@@ -475,6 +475,48 @@ class PanoramicImageView(MethodView):
         return jsonify({"message": "Panoramic image deleted successfully"}), 200
 
 
+class PropertyImageLabelUpdateView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def put(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try: 
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 200
+        
+        data = request.json
+        property_id = data.get('property_id')
+        image_name = data.get('image_name')
+        url = data.get('url')
+        new_label = data.get('new_label')
+
+        if not property_id or not image_name or not new_label:
+            return jsonify({'error': 'property_id, image_name, or new_label is missing in the request body'})
+
+        property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
+        property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
+        if property_data is None or property_seller_data is None:
+            return jsonify({'error': 'Property does not Exists or you are not allowed to update this property'}), 200
+
+        # Update the image URL and label in the database
+        result = current_app.db.properties.update_one(
+            {"_id": ObjectId(property_id), "images.name": image_name, "images.image_url": url},
+            {"$set": {"images.$.label": new_label}}
+        )
+
+        # Check if the update was successful
+        if result.modified_count > 0:
+            return jsonify({"message": "Image updated successfully"})
+        else:
+            return jsonify({"error": "Image not found or update failed"})
+
 class PropertyImageDeleteView(MethodView): 
     decorators = [custom_jwt_required()]
     

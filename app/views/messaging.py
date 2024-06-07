@@ -342,6 +342,7 @@ class BuyerSellerChatUsersListView(MethodView):
                     receiver['property_address'] = None
                 receiver['owner_email'] = seller.get('email') if seller else None
                 receiver['first_name'] = seller.get('first_name') if seller else None
+                receiver['last_name'] = seller.get('last_name') if seller else None
                 receiver['profile_pic'] = seller.get('profile_pic') if seller else None
                 receiver['user_id'] = receiver.pop('seller_id')
                 receiver['time'] = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -360,6 +361,7 @@ class BuyerSellerChatUsersListView(MethodView):
                     receiver['property_address'] = None
                 receiver['email'] = buyer.get('email') if buyer else None
                 receiver['first_name'] = buyer.get('first_name') if buyer else None
+                receiver['last_name'] = buyer.get('last_name') if buyer else None
                 receiver['profile_pic'] = buyer.get('profile_pic') if buyer else None
                 receiver['user_id'] = receiver.pop('buyer_id')
                 receiver['time'] = datetime.now().strftime("%Y%m%d%H%M%S")

@@ -48,6 +48,7 @@ api_bp.add_url_rule(rule='user/properties/list', view_func=SellerPropertyListVie
 api_bp.add_url_rule(rule='user/properties', view_func=AllPropertyListView.as_view('user_properties'))
 api_bp.add_url_rule(rule='user/properties/<string:property_id>', view_func=PropertyUpdateView.as_view('user_properties_update'))
 api_bp.add_url_rule(rule='user/properties/image/remove', view_func=PropertyImageDeleteView.as_view('user_properties_image_remove'))
+api_bp.add_url_rule(rule='user/properties/image/label', view_func=PropertyImageLabelUpdateView.as_view('user_properties_image_label'))
 api_bp.add_url_rule(rule='user/properties/add/external', view_func=ExternalPropertyAddView.as_view('user_properties_add_external'))
 api_bp.add_url_rule(rule='user/properties/panoramic_images', view_func=PanoramicImageView.as_view('user_properties_add_panoramic_images'))
 api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>', view_func=PanoramicImageView.as_view('user_properties_get_panoramic_images'))
