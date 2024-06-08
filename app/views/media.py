@@ -469,6 +469,17 @@ class DocAnswerInsertionView(MethodView):
                         "text": question.get("text"),
                         "answer_input_type": question.get("answer_locations", [])[0].get("answerInputType")
                     }
+                    if question.get("answer_locations", [])[0].get("answerInputType") == 'multiple-checkbox':
+                        position_dict = {}
+                        answer_locations = question.get("answer_locations", [])
+                        for location in answer_locations:
+                            position = location['position']
+                            value = location['value']
+                            if position not in position_dict:
+                                position_dict[position] = []
+                            position_dict[position].append(value)
+                        question_info['values'] = position_dict
+
                     questions.append(question_info)
 
             log_action(user['uuid'], user['role'], "viewed-document-questions", {'document_id':document_id})
@@ -496,7 +507,7 @@ class DocAnswerInsertionView(MethodView):
 
             question_id = request.json['question_id']
             answer = request.json['answer']
-            value = request.json['value']  #for multiple-checkbox
+            value = request.json.get('value')  #for multiple-checkbox
 
             # Retrieve original PDF from MongoDB
             document = current_app.db.documents.find_one({'_id': ObjectId(document_id)})
@@ -524,7 +535,7 @@ class DocAnswerInsertionView(MethodView):
 
             
             inserted_answer = insert_answer_in_pdf(
-                new_doc_path, original_file_path, answer_locations, answer, user_media_dir, user, filename
+                new_doc_path, original_file_path, answer_locations, answer, user_media_dir, user, value, filename
             )
 
             if inserted_answer.get('error'):

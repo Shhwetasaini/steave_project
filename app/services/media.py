@@ -31,7 +31,7 @@ def resource_exists(preview_page_url, doc_url):
            (os.path.isfile(preview_page_url) or os.path.isfile(doc_url))
 
 
-def insert_answer_in_pdf(new_doc_path, original_file_path, answer_locations, answer, user_media_dir, user, filename):
+def insert_answer_in_pdf(new_doc_path, original_file_path, answer_locations, answer, user_media_dir, user, value, filename):
     if os.path.exists(new_doc_path):
         reader = PdfReader(new_doc_path)
     else:
@@ -54,13 +54,20 @@ def insert_answer_in_pdf(new_doc_path, original_file_path, answer_locations, ans
 
             # Add all answer locations to the overlay
             for location in page_answer_locations:
-                if location['answerInputType'] == 'single-checkbox' or location['answerInputType'] == 'multiple-checkbox':
+                if location['answerInputType'] == 'single-checkbox':
                     if answer != True:
                         return {'error': 'answer value must be true for single-checkbox questions'}
                     
                     x = location['startX']
                     y = letter[1] - location['endY'] + 6
                     can.drawString(x, y, '✔')
+                elif location['answerInputType'] == 'multiple-checkbox':
+                    if answer != True or not value:
+                        return {'error': 'answer value must be true and option value is required for multiple-checkbox questions'}
+                    if location['value'] == value:
+                        x = location['startX']
+                        y = letter[1] - location['endY'] + 6
+                        can.drawString(x, y, '✔')
                 else:                   
                     x = location['startX']
                     y = letter[1] - location['endY'] + 2
