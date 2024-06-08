@@ -1,7 +1,8 @@
 from datetime import datetime
 import werkzeug
-import logging
+from bson import ObjectId
 import os
+import urllib
 from email_validator import validate_email, EmailNotValidError
 
 from flask.views import MethodView
@@ -11,8 +12,11 @@ from flask_jwt_extended import get_jwt_identity
 from flask import current_app
 from app.services.admin import log_request
 from app.services.authentication import custom_jwt_required, log_action
-from app.services.media import extract_first_page_as_image, document_exists, resource_exists
-
+from app.services.media import (
+    extract_first_page_as_image, 
+    document_exists, resource_exists,
+    insert_answer_in_pdf
+)
 
 
 class ReceiveMediaView(MethodView):
@@ -289,9 +293,14 @@ class AllDocsView(MethodView):
                                         current_app.db.documents.insert_one(document_data)
 
         # Retrieve data from MongoDB and return as JSON response
-        documents = list(current_app.db.documents.find({}, {"_id": 0}))
-        log_action(user['uuid'], user['role'], "viwed-all-document", None)
-        return jsonify(documents), 200
+        documents = list(current_app.db.documents.find({}))
+        formatted_documents = []
+        for doc in documents:
+            doc['id'] = str(doc.pop('_id'))
+            formatted_documents.append(doc)
+
+        log_action(user['uuid'], user['role'], "viewed-all-documents", None)
+        return jsonify(formatted_documents), 200
 
 
 class UserDownloadedDocsView(MethodView):
@@ -429,4 +438,132 @@ class DocsDateRangeView(MethodView):
                     return jsonify([]) 
         except Exception as e:
             return jsonify({"error": str(e)})
+
+
+class DocAnswerInsertionView(MethodView):
+    decorators = [custom_jwt_required()]
+    
+    def get(self, document_id):
+        try:
+            log_request()
+            current_user = get_jwt_identity()
+            try:
+                validate_email(current_user)
+                user = current_app.db.users.find_one({'email': current_user})
+            except EmailNotValidError:
+                user = current_app.db.users.find_one({'uuid': current_user})
+
+            if not user:
+                return jsonify({'error': 'User not found'})
             
+            document = current_app.db.documents.find_one({'_id': ObjectId(document_id)})
+            if not document:
+                return jsonify({'error': 'document not found'})
+            
+            doc_questions = list(current_app.db.doc_questions_answers.find({'document_id': document_id}))
+            questions = []
+            for question in doc_questions:
+                if len(question.get("answer_locations", [])) > 0:
+                    question_info = {
+                        "question_id": str(question.pop('_id')),
+                        "text": question.get("text"),
+                        "answer_input_type": question.get("answer_locations", [])[0].get("answerInputType")
+                    }
+                    questions.append(question_info)
+
+            log_action(user['uuid'], user['role'], "viewed-document-questions", {'document_id':document_id})
+            return jsonify(questions), 200
+        except Exception as e:
+            return jsonify({"error": str(e)})
+
+    def post(self, document_id):
+        try:
+            log_request()
+            current_user = get_jwt_identity()
+            try:
+                validate_email(current_user)
+                user = current_app.db.users.find_one({'email': current_user})
+            except EmailNotValidError:
+                user = current_app.db.users.find_one({'uuid': current_user})
+
+            if not user:
+                return jsonify({'error': 'User not found'})
+
+            # Check if all required parameters are present in the request payload
+            required_params = ['question_id', 'answer']
+            if not all(param in request.json for param in required_params):
+                return jsonify({'error': 'Missing required parameters'})
+
+            question_id = request.json['question_id']
+            answer = request.json['answer']
+            value = request.json['value']  #for multiple-checkbox
+
+            # Retrieve original PDF from MongoDB
+            document = current_app.db.documents.find_one({'_id': ObjectId(document_id)})
+            if not document:
+                return jsonify({'error': 'Document not found'})
+
+            # Retrieve answer locations from the database based on the question ID
+            answer_locations = current_app.db.doc_questions_answers.find_one(
+                {'document_id': document_id, '_id': ObjectId(question_id)},
+                {'answer_locations': 1, '_id': 0}
+            )
+
+            if not answer_locations:
+                return jsonify({'error': 'Question does not exist for this document'})
+
+            # Get URL of original PDF
+            relative_path_encoded = document['url'].split('/media/')[-1]
+            relative_path_decoded = urllib.parse.unquote(relative_path_encoded)
+            original_file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], relative_path_decoded)
+            
+            # Check if modified PDF already exists
+            filename = f"{user['first_name']}-{user['last_name']}_{werkzeug.utils.secure_filename(document['name'])}"
+            user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid']), 'uploaded_docs')
+            new_doc_path = os.path.join(user_media_dir, filename)
+
+            
+            inserted_answer = insert_answer_in_pdf(
+                new_doc_path, original_file_path, answer_locations, answer, user_media_dir, user, filename
+            )
+
+            if inserted_answer.get('error'):
+                return jsonify(inserted_answer)
+            else:
+                doc_url = inserted_answer.get('doc_url')
+
+            # Update the document data in the database with the file URL
+            document_data = {
+                'user_name': user.get('first_name') + " " + user['last_name'],
+                'name': filename,
+                'url': doc_url,
+                'type': f"filled_{document['type']}",
+                'uploaded_at': datetime.now()
+            }
+
+            # Update the uploaded_documents collection in the database
+            current_app.db.users_uploaded_docs.update_one(
+                {'uuid': user['uuid']},
+                {'$push': {'uploaded_documents': document_data}},
+                upsert=True
+            )
+
+            # Update the doc_questions_answers collection with the answer
+            current_app.db.doc_questions_answers.update_one(
+                {'document_id': document_id, '_id': ObjectId(question_id)},
+                {'$set': {'answer': answer}},
+                upsert=True
+            )
+
+            log_data =  {
+                'document_id':document_id,
+                'question_id': question_id,
+                'answer': answer,
+                'doc_url': doc_url
+            }
+
+            log_action(user['uuid'], user['role'], "inserted-answer-for-question", log_data)
+            # Return the URL of the saved PDF
+            return jsonify({'success': True, 'pdf_url': doc_url})
+        except Exception as e:
+            return jsonify({'error': str(e)})

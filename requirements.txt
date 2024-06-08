@@ -6,6 +6,8 @@ Flask-JWT-Extended
 python-dotenv
 PyMuPDF
 pdf2image
+PyPDF2
+reportlab
 sendgrid
 geopy
 paho-mqtt
