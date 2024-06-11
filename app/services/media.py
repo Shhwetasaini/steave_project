@@ -68,11 +68,62 @@ def insert_answer_in_pdf(new_doc_path, original_file_path, answer_locations, ans
                         x = location['startX']
                         y = letter[1] - location['endY'] + 6
                         can.drawString(x, y, '✔')
-                else:                   
+                elif location['answerInputType'] == 'multiline':
+                    position = location['position']
+                    text = answer
+                    # Filter locations with the same position
+                    positions = [loc for loc in page_answer_locations if loc['position'] == position]
+
+                    # Track whether there's more text to draw
+                    text_index = 0
+
+                    # Iterate over each line position
+                    for pos in positions:
+                        if text_index >= len(text):
+                            break
+
+                        # Set the starting coordinates for the current line
+                        x = pos['startX']
+                        y = letter[1] - pos['endY'] + 2
+                        max_width = pos['endX'] - pos['startX']
+
+                        # Loop to insert text within the line width
+                        while text_index < len(text):
+                            # Determine the maximum number of characters that fit within the max_width
+                            for i in range(len(text) - text_index, 0, -1):
+                                substring_width = can.stringWidth(text[text_index:text_index + i], "Helvetica", 12)
+                                if substring_width <= max_width:
+                                    # Draw the substring at the current position
+                                    can.drawString(x, y, text[text_index:text_index + i])
+                                    # Move the text index forward by the number of characters drawn
+                                    text_index += i
+                                    break
+                            else:
+                                # If no fitting substring is found, break the loop
+                                break
+                            
+                            # Move to the next line if there's more text to draw
+                            if text_index < len(text):
+                                next_pos_index = positions.index(pos) + 1
+                                if next_pos_index < len(positions):
+                                    next_pos = positions[next_pos_index]
+                                    x = next_pos['startX']
+                                    y = letter[1] - next_pos['endY'] + 2
+                                    max_width = next_pos['endX'] - next_pos['startX']
+                                    break
+                                else:
+                                    text_index = len(text)
+                                    break
+                else:
                     x = location['startX']
                     y = letter[1] - location['endY'] + 2
-                    can.drawString(x, y, answer)
-
+                    max_width = location['endX'] - location['startX']
+                    text = answer
+                    for i in range(len(text), -1, -1):
+                        if can.stringWidth(text[:i], "Helvetica", 12) <= max_width:
+                            can.drawString(x, y, text[:i])
+                            break
+                            
             can.save()
 
             # Move to the beginning of the StringIO buffer

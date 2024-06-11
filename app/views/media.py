@@ -479,7 +479,24 @@ class DocAnswerInsertionView(MethodView):
                                 position_dict[position] = []
                             position_dict[position].append(value)
                         question_info['values'] = position_dict
-
+                    elif question.get("answer_locations", [])[0].get("answerInputType") == 'multiline':
+                        position_dict = {}
+                        answer_locations = question.get("answer_locations", [])
+                        for location in answer_locations:
+                            position = location['position']
+                            max_width = location['endX'] - location['startX']
+                            if position not in position_dict:
+                                position_dict[position] = []
+                            position_dict[position].append(max_width)
+                        question_info['max_width'] = position_dict
+                    elif question.get("answer_locations", [])[0].get("answerInputType") == 'single-line':
+                        answer_locations = question.get("answer_locations", [])
+                        answers_max_width = []
+                        for location in answer_locations:
+                            max_width = location['endX'] - location['startX']
+                            answers_max_width.append(max_width)
+                        question_info['max_width'] = answers_max_width
+                        
                     questions.append(question_info)
 
             log_action(user['uuid'], user['role'], "viewed-document-questions", {'document_id':document_id})

@@ -424,6 +424,14 @@ class SingleFormQuestionView(MethodView):
                     {'_id': ObjectId(question_id), 'document_id':doc_id},
                     {'$set': {'text': new_question}}
                 )
+                log_data = {
+                    "question_id": question_id,
+                    "new_question": new_question,
+                    "document_id": doc_id,
+                    "answer_locations": currentRect
+                }
+                log_action(user['uuid'], user['role'], "updated-question-on-document", log_data)
+                return jsonify({'message': 'Question updated successfully'}), 200
             elif currentRect:
                 question = current_app.db.doc_questions_answers.find_one({'_id': ObjectId(question_id), 'document_id':doc_id})
                 if question:
@@ -444,6 +452,8 @@ class SingleFormQuestionView(MethodView):
                     return jsonify({'message': 'Question updated successfully'}), 200
                 else:
                     return jsonify({'error':"Question not found for this documnet"}),400
+            else:
+                return jsonify({'error':"Required payload is missing"}), 400
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
