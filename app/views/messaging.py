@@ -334,7 +334,7 @@ class BuyerSellerChatUsersListView(MethodView):
         receivers = list(current_app.db.buyer_seller_messaging.find({'buyer_id': user['uuid']}, {'property_id': 1, 'seller_id': 1, '_id': 0}))
         if len(receivers) != 0:
             for receiver in receivers:
-                seller = current_app.db.users.find_one({'uuid': receiver['seller_id']}, {'email': 1, 'first_name': 1, 'profile_pic': 1, '_id': 0})
+                seller = current_app.db.users.find_one({'uuid': receiver['seller_id']}, {'email': 1, 'first_name': 1, 'last_name': 1, 'profile_pic': 1, '_id': 0})
                 property_address = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, '_id': 0})
                 if property_address:
                     receiver['property_address'] = property_address['address']
@@ -353,7 +353,7 @@ class BuyerSellerChatUsersListView(MethodView):
             seller_id = user['uuid']
             receivers = list(current_app.db.buyer_seller_messaging.find({'seller_id': seller_id}, {'property_id': 1, 'buyer_id': 1, '_id': 0}))
             for receiver in receivers:
-                buyer = current_app.db.users.find_one({'uuid': receiver['buyer_id']}, {'email': 1,'first_name': 1,  'profile_pic': 1, '_id': 0})
+                buyer = current_app.db.users.find_one({'uuid': receiver['buyer_id']}, {'email': 1,'first_name': 1, 'last_name': 1, 'profile_pic': 1, '_id': 0})
                 property_address = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, '_id': 0})
                 if property_address:
                     receiver['property_address'] = property_address['address']
