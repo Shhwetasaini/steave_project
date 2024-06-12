@@ -560,22 +560,54 @@ class DocAnswerInsertionView(MethodView):
             else:
                 doc_url = inserted_answer.get('doc_url')
 
-            # Update the document data in the database with the file URL
+            # Document data to be inserted or updated
+            user_name = user.get('first_name') + " " + user['last_name']
+            doc_type = f"filled_{document['type']}"
+        
             document_data = {
-                'user_name': user.get('first_name') + " " + user['last_name'],
+                'user_name': user_name,
                 'name': filename,
                 'url': doc_url,
-                'type': f"filled_{document['type']}",
+                'type': doc_type,
                 'uploaded_at': datetime.now()
             }
-
-            # Update the uploaded_documents collection in the database
-            current_app.db.users_uploaded_docs.update_one(
-                {'uuid': user['uuid']},
-                {'$push': {'uploaded_documents': document_data}},
-                upsert=True
+        
+            # Check if a document with the same URL, user_name, name, and type already exists for the user
+            existing_document = current_app.db.users_uploaded_docs.find_one(
+                {
+                    'uuid': user['uuid'],
+                    'uploaded_documents': {
+                        '$elemMatch': {
+                            'url': doc_url,
+                            'user_name': user_name,
+                            'name': filename,
+                            'type': doc_type
+                        }
+                    }
+                },
+                {'uploaded_documents.$': 1}
             )
-
+        
+            if existing_document:
+                # Update the 'uploaded_at' timestamp of the existing document
+                current_app.db.users_uploaded_docs.update_one(
+                    {
+                        'uuid': user['uuid'],
+                        'uploaded_documents.url': doc_url,
+                        'uploaded_documents.user_name': user_name,
+                        'uploaded_documents.name': filename,
+                        'uploaded_documents.type': doc_type
+                    },
+                    {'$set': {'uploaded_documents.$.uploaded_at': datetime.now()}}
+                )
+            else:
+                # Push a new document if it doesn't already exist
+                current_app.db.users_uploaded_docs.update_one(
+                    {'uuid': user['uuid']},
+                    {'$push': {'uploaded_documents': document_data}},
+                    upsert=True
+                )
+        
             # Update the doc_questions_answers collection with the answer
             current_app.db.doc_questions_answers.update_one(
                 {'document_id': document_id, '_id': ObjectId(question_id)},
@@ -592,6 +624,6 @@ class DocAnswerInsertionView(MethodView):
 
             log_action(user['uuid'], user['role'], "inserted-answer-for-question", log_data)
             # Return the URL of the saved PDF
-            return jsonify({'success': True, 'pdf_url': doc_url})
+            return jsonify({'message': "Answer inserted successfully"})
         except Exception as e:
             return jsonify({'error': str(e)})

@@ -69,6 +69,8 @@ def insert_answer_in_pdf(new_doc_path, original_file_path, answer_locations, ans
                         y = letter[1] - location['endY'] + 6
                         can.drawString(x, y, '✔')
                 elif location['answerInputType'] == 'multiline':
+                    if type(answer) != str:
+                        return {'error': 'Only string values allowed for multiline answer'}
                     position = location['position']
                     text = answer
                     # Filter locations with the same position
@@ -115,6 +117,8 @@ def insert_answer_in_pdf(new_doc_path, original_file_path, answer_locations, ans
                                     text_index = len(text)
                                     break
                 else:
+                    if type(answer) != str:
+                        return {'error': 'Only string valueis allowed for single-line answer'}
                     x = location['startX']
                     y = letter[1] - location['endY'] + 2
                     max_width = location['endX'] - location['startX']
