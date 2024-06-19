@@ -64,7 +64,7 @@ def insert_answer_in_pdf(doc_path, answer_locations, answer, user, value, filena
             page = reader.pages[page_num]
 
             # Check if there are answer locations for this page
-            page_answer_locations = [loc for loc in answer_locations.get('answer_locations', []) if loc.get('pageNum') == page_num + 1]
+            page_answer_locations = [loc for loc in answer_locations if loc.get('pageNum') == page_num + 1]
             if page_answer_locations:
                 # Create a new PDF with ReportLab
                 packet = io.BytesIO()
@@ -171,7 +171,7 @@ def insert_answer_in_pdf(doc_path, answer_locations, answer, user, value, filena
         return {"error": str(e)}
 
 
-def send_finalized_copy(user, file_path):
+def send_finalized_document(user, file_path):
     try:
         # Read the PDF file
         with open(file_path, 'rb') as f:

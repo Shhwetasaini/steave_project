@@ -16,7 +16,8 @@ from app.services.media import (
     extract_first_page_as_image, 
     document_exists, resource_exists,
     insert_answer_in_pdf,
-    create_user_document
+    create_user_document,
+    send_finalized_document
 )
 
 
@@ -531,6 +532,7 @@ class DocAnswerInsertionView(MethodView):
                     question_info = {
                         "question_id": str(question.pop('_id')),
                         "text": question.get("text"),
+                        "type" : question.get("type"),
                         "answer_input_type": question.get("answer_locations", [])[0].get("answerInputType")
                     }
                     if question.get("answer_locations", [])[0].get("answerInputType") == 'multiple-checkbox':
@@ -593,7 +595,9 @@ class DocAnswerInsertionView(MethodView):
 
             # Retrieve original PDF from MongoDB
             document = current_app.db.documents.find_one({'_id': ObjectId(document_id)})
-            
+            if not document:
+                return jsonify({'error': 'Document not found'})
+
             # Document data to be inserted or updated
             user_name = user.get('first_name') + " " + user['last_name']
             doc_type = f"fill_and_sign_{document['type']}"
@@ -612,19 +616,20 @@ class DocAnswerInsertionView(MethodView):
                 },
                 {'uploaded_documents.$': 1, '_id':0}
             )
-            if not document or not existing_document:
-                return jsonify({'error': 'Document not found'})
+            if not existing_document:
+                return jsonify({'error': 'Please request for sign and fill of the document'})
             
             user_document = existing_document.get('uploaded_documents')[0]
 
             # Retrieve answer locations from the database based on the question ID
-            answer_locations = current_app.db.doc_questions_answers.find_one(
+            question = current_app.db.doc_questions_answers.find_one(
                 {'document_id': document_id, '_id': ObjectId(question_id)},
-                {'answer_locations': 1, '_id': 0}
+                {'_id': 0}
             )
 
-            if not answer_locations:
+            if not question:
                 return jsonify({'error': 'Question does not exist for this document'})
+            answer_locations = question.get('answer_locations')
 
             # Get URL of original PDF
             relative_path_encoded = doc_url.split('/media/')[-1]
@@ -646,6 +651,27 @@ class DocAnswerInsertionView(MethodView):
                 {'$set': {'answer': answer}},
                 upsert=True
             )
+
+            if question.get('text') in ["Signature", "signature"]:
+                current_app.db.users_uploaded_docs.update_one(
+                    {
+                        'uuid': user['uuid'],
+                        'uploaded_documents.url': doc_url,
+                        'uploaded_documents.user_name': user_name,
+                        'uploaded_documents.name': user_document.get('name'),
+                        'uploaded_documents.type': doc_type
+                    },
+                    {'$set': {
+                                'uploaded_documents.$.uploaded_at': datetime.now(),
+                                'uploaded_documents.$.is_signed': True,
+                            }
+                    }
+                )
+                send_doc = send_finalized_document(user, doc_path)
+                if send_doc.get('message'):
+                    return jsonify({'message':"Document signed successfully and send to the user email"})
+                else:
+                    return jsonify({'error': send_doc.get('error')})
 
             log_data =  {
                 'document_id':document_id,

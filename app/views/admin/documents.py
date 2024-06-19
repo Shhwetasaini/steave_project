@@ -366,33 +366,27 @@ class SingleFormQuestionView(MethodView):
 
         data = request.json
         doc_id = data.get('document_id')
-        questions = data.get('question')
+        question = data.get('question')
+        question_type = data.get('question_type')
 
-        if not doc_id or not questions:
-            return jsonify({'error': 'document_id and questions are required'}), 400
+        if not doc_id or not question or not question_type:
+            return jsonify({'error': 'document_id and question and question_type are required'}), 400
 
         try:
             document = current_app.db.documents.find_one({'_id': ObjectId(doc_id)})
             if not document:
                 return jsonify({'error': 'document not found'}), 404
 
-            db_questions = []
-            for question in questions:
-                question_data = {
-                    'document_id': doc_id,
-                    'text': question,
-                    'answer_locations':[]
-                }
-                db_questions.append(question_data)
-            
-            current_app.db.doc_questions_answers.insert_many(db_questions)
-
-            log_data = {
-                "document_id": doc_id,
-                "questions": questions,
+            question_data = {
+                'document_id': doc_id,
+                'text': question,
+                'type': question_type,
+                'answer_locations':[]
             }
+            
+            current_app.db.doc_questions_answers.insert_one(question_data)
 
-            log_action(user['uuid'], user['role'], "added-question-on-document", log_data)
+            log_action(user['uuid'], user['role'], "added-question-on-document", question_data)
 
             return jsonify({'message': 'questions added successfully'})
 
@@ -408,6 +402,7 @@ class SingleFormQuestionView(MethodView):
         question_id = data.get('edit_question_id')
         doc_id = data.get('document_id')
         new_question = data.get('editquestion')
+        new_question_type  = data.get('edit_question_type')
         currentRect = data.get('currentRect')
 
         if not doc_id or not question_id:
@@ -417,16 +412,16 @@ class SingleFormQuestionView(MethodView):
             document = current_app.db.documents.find_one({'_id': ObjectId(doc_id)})
             if not document:
                 return jsonify({'error': 'document not found'}), 404
-            
-            if new_question:
+            if new_question or new_question_type:
                 # Update the question in the database
                 current_app.db.doc_questions_answers.update_one(
                     {'_id': ObjectId(question_id), 'document_id':doc_id},
-                    {'$set': {'text': new_question}}
+                    {'$set': {'text': new_question, 'type': new_question_type}}
                 )
                 log_data = {
                     "question_id": question_id,
                     "new_question": new_question,
+                    "new_question_type": new_question_type,
                     "document_id": doc_id,
                     "answer_locations": currentRect
                 }
