@@ -99,7 +99,9 @@ def is_valid(coupon):
 def validate_address(address):
 
     # Use Google Maps Geocoding API to validate the entered address
-    geocoder = GoogleV3(api_key='AIzaSyCPFDGMxu0OwtR6skUVt2e_pIY6TOFF42E')
+    google_location_api_key = current_app.config['GOOGLE_LOCATION_API_KEY']
+    
+    geocoder = GoogleV3(api_key=google_location_api_key)
     try:
         location = geocoder.geocode(address)
         if location:

@@ -30,7 +30,7 @@ class Config:
     SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
     STRIPE_PUBLIC_KEY = os.getenv('STRIPE_PUBLIC_KEY')
     STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
-
+    GOOGLE_LOCATION_API_KEY = os.getenv('GOOGLE_LOCATION_API_KEY')
     
     @staticmethod
     def init_app(app):

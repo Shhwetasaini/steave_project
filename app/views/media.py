@@ -15,7 +15,8 @@ from app.services.authentication import custom_jwt_required, log_action
 from app.services.media import (
     extract_first_page_as_image, 
     document_exists, resource_exists,
-    insert_answer_in_pdf
+    insert_answer_in_pdf,
+    create_user_document
 )
 
 
@@ -349,7 +350,7 @@ class UserUploadedDocsView(MethodView):
             return jsonify({'error': 'User not found'}), 200
 
 
-class DocsDateRangeView(MethodView):
+class UserDocsDateRangeView(MethodView):
     decorators = [custom_jwt_required()]
     
     def get(self):
@@ -440,6 +441,69 @@ class DocsDateRangeView(MethodView):
             return jsonify({"error": str(e)})
 
 
+class DocumentFillRequestView(MethodView):
+    decorators = [custom_jwt_required()]
+    
+    def get(self, document_id):
+        try:
+            log_request()
+            current_user = get_jwt_identity()
+            try:
+                validate_email(current_user)
+                user = current_app.db.users.find_one({'email': current_user})
+            except EmailNotValidError:
+                user = current_app.db.users.find_one({'uuid': current_user})
+
+            if not user:
+                return jsonify({'error': 'User not found'})
+            
+            document = current_app.db.documents.find_one({'_id': ObjectId(document_id)})
+            if not document:
+                return jsonify({'error': 'document not found'})
+            
+            # Get URL of original PDF
+            relative_path_encoded = document['url'].split('/media/')[-1]
+            relative_path_decoded = urllib.parse.unquote(relative_path_encoded)
+            original_file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], relative_path_decoded)
+
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+            # Check if modified PDF already exists
+            filename = f"{timestamp}_{user['first_name']}-{user['last_name']}_{werkzeug.utils.secure_filename(document['name'])}"
+            user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid']), 'uploaded_docs')
+            new_doc_path = os.path.join(user_media_dir, filename)
+
+            user_document = create_user_document(original_file_path, new_doc_path, user_media_dir, filename, user)
+            if user_document.get('error'):
+                return jsonify(user_document)
+            else:
+                doc_url = user_document.get('doc_url')
+
+            # Document data to be inserted or updated
+            user_name = user.get('first_name') + " " + user['last_name']
+            doc_type = f"fill_and_sign_{document['type']}"
+        
+            document_data = {
+                'user_name': user_name,
+                'name': filename,
+                'url': doc_url,
+                'type': doc_type,
+                'is_signed': False,
+                'uploaded_at': datetime.now()
+            }
+            
+            # Push a new document
+            current_app.db.users_uploaded_docs.update_one(
+                {'uuid': user['uuid']},
+                {'$push': {'uploaded_documents': document_data}},
+                upsert=True
+            )
+
+            return jsonify(user_document), 200
+        except Exception as e:
+            return jsonify({"error": str(e)})
+
+
 class DocAnswerInsertionView(MethodView):
     decorators = [custom_jwt_required()]
     
@@ -518,18 +582,40 @@ class DocAnswerInsertionView(MethodView):
                 return jsonify({'error': 'User not found'})
 
             # Check if all required parameters are present in the request payload
-            required_params = ['question_id', 'answer']
+            required_params = ['question_id', 'answer', 'doc_url']
             if not all(param in request.json for param in required_params):
                 return jsonify({'error': 'Missing required parameters'})
 
             question_id = request.json['question_id']
             answer = request.json['answer']
+            doc_url = request.json['doc_url']
             value = request.json.get('value')  #for multiple-checkbox
 
             # Retrieve original PDF from MongoDB
             document = current_app.db.documents.find_one({'_id': ObjectId(document_id)})
-            if not document:
+            
+            # Document data to be inserted or updated
+            user_name = user.get('first_name') + " " + user['last_name']
+            doc_type = f"fill_and_sign_{document['type']}"
+            
+            # Check if a document with the same URL, user_name, name, and type already exists for the user
+            existing_document = current_app.db.users_uploaded_docs.find_one(
+                {
+                    'uuid': user['uuid'],
+                    'uploaded_documents': {
+                        '$elemMatch': {
+                            'url': doc_url,
+                            'user_name': user_name,
+                            'type': doc_type
+                        }
+                    }
+                },
+                {'uploaded_documents.$': 1, '_id':0}
+            )
+            if not document or not existing_document:
                 return jsonify({'error': 'Document not found'})
+            
+            user_document = existing_document.get('uploaded_documents')[0]
 
             # Retrieve answer locations from the database based on the question ID
             answer_locations = current_app.db.doc_questions_answers.find_one(
@@ -541,72 +627,18 @@ class DocAnswerInsertionView(MethodView):
                 return jsonify({'error': 'Question does not exist for this document'})
 
             # Get URL of original PDF
-            relative_path_encoded = document['url'].split('/media/')[-1]
+            relative_path_encoded = doc_url.split('/media/')[-1]
             relative_path_decoded = urllib.parse.unquote(relative_path_encoded)
-            original_file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], relative_path_decoded)
-            
-            # Check if modified PDF already exists
-            filename = f"{user['first_name']}-{user['last_name']}_{werkzeug.utils.secure_filename(document['name'])}"
-            user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid']), 'uploaded_docs')
-            new_doc_path = os.path.join(user_media_dir, filename)
-
+            doc_path = os.path.join(current_app.config['UPLOAD_FOLDER'], relative_path_decoded)
             
             inserted_answer = insert_answer_in_pdf(
-                new_doc_path, original_file_path, answer_locations, answer, user_media_dir, user, value, filename
+                doc_path, answer_locations, answer, user, value, user_document.get('name')
             )
 
             if inserted_answer.get('error'):
                 return jsonify(inserted_answer)
             else:
                 doc_url = inserted_answer.get('doc_url')
-
-            # Document data to be inserted or updated
-            user_name = user.get('first_name') + " " + user['last_name']
-            doc_type = f"filled_{document['type']}"
-        
-            document_data = {
-                'user_name': user_name,
-                'name': filename,
-                'url': doc_url,
-                'type': doc_type,
-                'uploaded_at': datetime.now()
-            }
-        
-            # Check if a document with the same URL, user_name, name, and type already exists for the user
-            existing_document = current_app.db.users_uploaded_docs.find_one(
-                {
-                    'uuid': user['uuid'],
-                    'uploaded_documents': {
-                        '$elemMatch': {
-                            'url': doc_url,
-                            'user_name': user_name,
-                            'name': filename,
-                            'type': doc_type
-                        }
-                    }
-                },
-                {'uploaded_documents.$': 1}
-            )
-        
-            if existing_document:
-                # Update the 'uploaded_at' timestamp of the existing document
-                current_app.db.users_uploaded_docs.update_one(
-                    {
-                        'uuid': user['uuid'],
-                        'uploaded_documents.url': doc_url,
-                        'uploaded_documents.user_name': user_name,
-                        'uploaded_documents.name': filename,
-                        'uploaded_documents.type': doc_type
-                    },
-                    {'$set': {'uploaded_documents.$.uploaded_at': datetime.now()}}
-                )
-            else:
-                # Push a new document if it doesn't already exist
-                current_app.db.users_uploaded_docs.update_one(
-                    {'uuid': user['uuid']},
-                    {'$push': {'uploaded_documents': document_data}},
-                    upsert=True
-                )
         
             # Update the doc_questions_answers collection with the answer
             current_app.db.doc_questions_answers.update_one(
@@ -624,6 +656,6 @@ class DocAnswerInsertionView(MethodView):
 
             log_action(user['uuid'], user['role'], "inserted-answer-for-question", log_data)
             # Return the URL of the saved PDF
-            return jsonify({'message': "Answer inserted successfully"})
+            return jsonify({'doc_url': doc_url})
         except Exception as e:
             return jsonify({'error': str(e)})

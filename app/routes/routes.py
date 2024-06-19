@@ -35,7 +35,8 @@ api_bp.add_url_rule(rule='user/uploaded-documents', view_func=UserUploadedDocsVi
 api_bp.add_url_rule(rule='/user/media', view_func=SendMediaView.as_view('users_media'))
 api_bp.add_url_rule(rule='/user/media/delete', view_func=DeleteMediaView.as_view('users_media_delete'))
 api_bp.add_url_rule(rule='/docs', view_func=AllDocsView.as_view('docs'))
-api_bp.add_url_rule(rule='/user/docs/date', view_func=DocsDateRangeView.as_view('docs_date_range'))
+api_bp.add_url_rule(rule='/user/docs/date', view_func=UserDocsDateRangeView.as_view('user_docs_date_range'))
+api_bp.add_url_rule(rule='/docs/fill-request/<string:document_id>', view_func=DocumentFillRequestView.as_view('docs_fill_request'))
 api_bp.add_url_rule(rule='/docs/<string:document_id>', view_func=DocAnswerInsertionView.as_view('docs_answer'))
 
 
