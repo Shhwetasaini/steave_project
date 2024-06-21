@@ -19,6 +19,7 @@ from app.services.media import (
     create_user_document,
     send_finalized_document
 )
+from app.services.properties import get_client_ip
 
 
 class ReceiveMediaView(MethodView):
@@ -499,7 +500,11 @@ class DocumentFillRequestView(MethodView):
                 {'$push': {'uploaded_documents': document_data}},
                 upsert=True
             )
-
+            document['user_ip'] = get_client_ip()
+            document['timestamp'] = datetime.now()
+            document['original_document_id'] = document_id
+            document['original_document_name'] = document['name']
+            log_action(user['uuid'], user['role'], "document-fill-request/view", document_data)
             return jsonify(user_document), 200
         except Exception as e:
             return jsonify({"error": str(e)})
@@ -668,16 +673,38 @@ class DocAnswerInsertionView(MethodView):
                     }
                 )
                 send_doc = send_finalized_document(user, doc_path)
-                if send_doc.get('message'):
+                if not send_doc.get('message'):
+                    log_data =  {
+                        'original_document_id': document_id,
+                        'original_document_name': document['name'],
+                        'question_id': question_id,
+                        'question_text': question['text'], 
+                        'inserted_text': answer,
+                        'user_doc_id' : str(user_document.get('_id')),
+                        'user_doc_name': user_document.get('name'),
+                        'user_doc_url': doc_url,
+                        'user_doc_signed': user_document.get('is_signed'),
+                        'email_sent': True, 
+                        'user_ip': get_client_ip(),
+                        'timestamp': datetime.now()
+                    }
+                    log_action(user['uuid'], user['role'], "document-signed-and-email-sent", log_data)
                     return jsonify({'message':"Document signed successfully and send to the user email"})
                 else:
                     return jsonify({'error': send_doc.get('error')})
 
             log_data =  {
-                'document_id':document_id,
+                'original_document_id': document_id,
+                'original_document_name': document['name'],
                 'question_id': question_id,
-                'answer': answer,
-                'doc_url': doc_url
+                'question_text': question['text'], 
+                'inserted_text': answer,
+                'user_doc_id' : str(user_document.get('_id')),
+                'user_doc_name': user_document.get('name'),
+                'user_doc_url': doc_url,
+                'user_doc_signed': user_document.get('is_signed'),
+                'user_ip': get_client_ip(),
+                'timestamp': datetime.now()
             }
 
             log_action(user['uuid'], user['role'], "inserted-answer-for-question", log_data)
