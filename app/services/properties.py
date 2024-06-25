@@ -131,3 +131,33 @@ def save_panoramic_image(panoramic_image, user, property_id):
     image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), 'panoramic_image', org_filename))
 
     return {'image_url':image_url, 'filename': filename}
+
+
+def get_receivers(user_role_key, user_uuid):
+            pipeline = [
+                {
+                    '$match': {
+                        user_role_key: user_uuid
+                    }
+                },
+                {
+                    '$project': {
+                        '_id': 0,
+                        'property_id': 1,
+                        'other_user_id': f"${'buyer_id' if user_role_key == 'seller_id' else 'seller_id'}",
+                        'last_message': {'$arrayElemAt': ['$message_content', -1]}
+                    }
+                }
+            ]
+            receivers = list(current_app.db.buyer_seller_messaging.aggregate(pipeline))
+            for receiver in receivers:
+                other_user = current_app.db.users.find_one({'uuid': receiver['other_user_id']}, {'email': 1, 'first_name': 1, 'last_name': 1, 'profile_pic': 1, '_id': 0})
+                property_address = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, '_id': 0})
+                receiver['property_address'] = property_address['address'] if property_address else None
+                receiver['email'] = other_user.get('email') if other_user else None
+                receiver['first_name'] = other_user.get('first_name') if other_user else None
+                receiver['last_name'] = other_user.get('last_name') if other_user else None
+                receiver['profile_pic'] = other_user.get('profile_pic') if other_user else None
+                receiver['user_id'] = receiver.pop('other_user_id')
+                receiver['time'] = datetime.now().strftime("%Y%m%d%H%M%S")
+            return receivers

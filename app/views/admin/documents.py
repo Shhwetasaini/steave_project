@@ -368,6 +368,8 @@ class SingleFormQuestionView(MethodView):
         doc_id = data.get('document_id')
         question = data.get('question')
         question_type = data.get('question_type')
+        description = data.get('description')
+        link = data.get('link')
 
         if not doc_id or not question or not question_type:
             return jsonify({'error': 'document_id and question and question_type are required'}), 400
@@ -381,6 +383,8 @@ class SingleFormQuestionView(MethodView):
                 'document_id': doc_id,
                 'text': question,
                 'type': question_type,
+                'description': description,
+                'link': link,
                 'answer_locations':[]
             }
             
@@ -403,6 +407,8 @@ class SingleFormQuestionView(MethodView):
         doc_id = data.get('document_id')
         new_question = data.get('editquestion')
         new_question_type  = data.get('edit_question_type')
+        description  = data.get('edit_description')
+        link = data.get('edit_link')
         currentRect = data.get('currentRect')
 
         if not doc_id or not question_id:
@@ -412,16 +418,18 @@ class SingleFormQuestionView(MethodView):
             document = current_app.db.documents.find_one({'_id': ObjectId(doc_id)})
             if not document:
                 return jsonify({'error': 'document not found'}), 404
-            if new_question or new_question_type:
+            if new_question and new_question_type:
                 # Update the question in the database
                 current_app.db.doc_questions_answers.update_one(
                     {'_id': ObjectId(question_id), 'document_id':doc_id},
-                    {'$set': {'text': new_question, 'type': new_question_type}}
+                    {'$set': {'text': new_question, 'type': new_question_type, 'description': description, 'link':link}}
                 )
                 log_data = {
                     "question_id": question_id,
                     "new_question": new_question,
                     "new_question_type": new_question_type,
+                    "description": description,
+                    "link": link,
                     "document_id": doc_id,
                     "answer_locations": currentRect
                 }

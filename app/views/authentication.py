@@ -135,7 +135,7 @@ class LoginUserView(MethodView):
             encrpted_password = hashlib.sha256(password.encode("utf-8")).hexdigest()
             if encrpted_password == user['password']:
                 access_token = create_access_token(identity=email)
-                
+                data['password'] = encrpted_password
                 log_action(user['uuid'], user['role'], "email-login", data)
                 return jsonify({"message":"User Logged in successfully!", "access_token":access_token}), 200
             else:
@@ -186,7 +186,7 @@ class ProfileUserView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if user:
-            log_action(user['uuid'], user['role'], "viewed-profile", None)
+            log_action(user['uuid'], user['role'], "viewed-profile", {'user': current_user})
             user.pop('_id', None)
             user.pop('password', None)
             
@@ -237,7 +237,7 @@ class LogoutUserView(MethodView):
             "created_at": now,
             'user_id': user['uuid']
         })
-        log_action(user['uuid'], user['role'], "logout", None)
+        log_action(user['uuid'], user['role'], "logout", {'user': current_user})
         return jsonify({"message": "logout successfully"}), 200
 
 
@@ -384,6 +384,7 @@ class ResetPasswdView(MethodView):
             if time_difference.total_seconds() <= 3600 and user['otp']['is_used'] == False:
                 hashed_password = hashlib.sha256(new_password.encode("utf-8")).hexdigest()  
                 current_app.db.users.update_one({'email': email}, {'$set': {'password': hashed_password, "otp.is_used": True}})
+                data['new_password'] = hashed_password
                 log_action(user['uuid'], user['role'], "reset-password",  data)
                 return jsonify({'message': 'password reset successfully'}), 200
             else:

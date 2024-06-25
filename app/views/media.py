@@ -538,7 +538,8 @@ class DocAnswerInsertionView(MethodView):
                         "question_id": str(question.pop('_id')),
                         "text": question.get("text"),
                         "type" : question.get("type"),
-                        "answer_input_type": question.get("answer_locations", [])[0].get("answerInputType")
+                        "answer_input_type": question.get("answer_locations", [])[0].get("answerInputType"),
+                        "answer_data_type": question.get("answer_locations", [])[0].get("answerOutputType")
                     }
                     if question.get("answer_locations", [])[0].get("answerInputType") == 'multiple-checkbox':
                         position_dict = {}

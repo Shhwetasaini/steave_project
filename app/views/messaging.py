@@ -11,6 +11,7 @@ import werkzeug
 from flask import current_app, url_for
 from app.services.admin import log_request
 from app.services.authentication import custom_jwt_required , log_action
+from app.services.properties import get_receivers
 
 
 class SaveUserMessageView(MethodView):
@@ -323,7 +324,7 @@ class BuyerSellerChatUsersListView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-        
+
         if not user:
             return jsonify({'error': 'User not found'}), 200
 
@@ -331,43 +332,13 @@ class BuyerSellerChatUsersListView(MethodView):
         if user_role == 'realtor':
             return jsonify({'error': 'Unauthorized access'}), 200
 
-        receivers = list(current_app.db.buyer_seller_messaging.find({'buyer_id': user['uuid']}, {'property_id': 1, 'seller_id': 1, '_id': 0}))
-        if len(receivers) != 0:
-            for receiver in receivers:
-                seller = current_app.db.users.find_one({'uuid': receiver['seller_id']}, {'email': 1, 'first_name': 1, 'last_name': 1, 'profile_pic': 1, '_id': 0})
-                property_address = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, '_id': 0})
-                if property_address:
-                    receiver['property_address'] = property_address['address']
-                else:
-                    receiver['property_address'] = None
-                receiver['owner_email'] = seller.get('email') if seller else None
-                receiver['first_name'] = seller.get('first_name') if seller else None
-                receiver['last_name'] = seller.get('last_name') if seller else None
-                receiver['profile_pic'] = seller.get('profile_pic') if seller else None
-                receiver['user_id'] = receiver.pop('seller_id')
-                receiver['time'] = datetime.now().strftime("%Y%m%d%H%M%S")
-               
-            log_action(user['uuid'], user['role'], "viwed-chat_users", None)
-            return jsonify(receivers), 200
-        else: 
-            seller_id = user['uuid']
-            receivers = list(current_app.db.buyer_seller_messaging.find({'seller_id': seller_id}, {'property_id': 1, 'buyer_id': 1, '_id': 0}))
-            for receiver in receivers:
-                buyer = current_app.db.users.find_one({'uuid': receiver['buyer_id']}, {'email': 1,'first_name': 1, 'last_name': 1, 'profile_pic': 1, '_id': 0})
-                property_address = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, '_id': 0})
-                if property_address:
-                    receiver['property_address'] = property_address['address']
-                else:
-                    receiver['property_address'] = None
-                receiver['email'] = buyer.get('email') if buyer else None
-                receiver['first_name'] = buyer.get('first_name') if buyer else None
-                receiver['last_name'] = buyer.get('last_name') if buyer else None
-                receiver['profile_pic'] = buyer.get('profile_pic') if buyer else None
-                receiver['user_id'] = receiver.pop('buyer_id')
-                receiver['time'] = datetime.now().strftime("%Y%m%d%H%M%S")
-            
-            log_action(user['uuid'], user['role'], "viwed-chat_users", None)    
-            return jsonify(receivers), 200
+        buyer_receivers = get_receivers('buyer_id', user['uuid'])
+        seller_receivers = get_receivers('seller_id', user['uuid'])
+
+        log_action(user['uuid'], user['role'], "viewed-chat_users", None)
+        
+        receivers = buyer_receivers + seller_receivers
+        return jsonify(receivers), 200
 
 
 class UserCustomerServicePropertySendMesssageView(MethodView):
@@ -497,7 +468,11 @@ class UserCustomerServicePropertyChatUserList(MethodView):
     def get(self):
         log_request()
         current_user = get_jwt_identity()
-        user = current_app.db.users.find_one({'email': current_user})
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
       
         if not user:
             return jsonify({'error': 'User not found'}), 200
@@ -517,4 +492,3 @@ class UserCustomerServicePropertyChatUserList(MethodView):
             return jsonify(chat_user_list), 200
         else :
             return jsonify([])
-

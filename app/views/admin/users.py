@@ -215,6 +215,7 @@ class AdminUserLoginView(MethodView):
             encrpted_password = hashlib.sha256(password.encode("utf-8")).hexdigest()
             if encrpted_password == user['password']:
                 access_token = create_access_token(identity=email)
+                data['password'] = encrpted_password
                 log_action(user['uuid'], user['role'], "login", data)
                 return jsonify({"message":"User Logged in successfully!", "access_token":access_token}), 200
             else:
