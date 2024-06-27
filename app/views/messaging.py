@@ -145,7 +145,7 @@ class CheckResponseView(MethodView):
 
         if message_document:
             response = message_document['messages']   #[message['message'] for message in messages]
-            log_action(user['uuid'], user['role'], "viewed-customer_service-chat", None)
+            log_action(user['uuid'], user['role'], "viewed-customer_service-chat", {})
             return jsonify(response), 200
         else:
             return jsonify({"response": "No response found!"}), 200
@@ -335,7 +335,7 @@ class BuyerSellerChatUsersListView(MethodView):
         buyer_receivers = get_receivers('buyer_id', user['uuid'])
         seller_receivers = get_receivers('seller_id', user['uuid'])
 
-        log_action(user['uuid'], user['role'], "viewed-chat_users", None)
+        log_action(user['uuid'], user['role'], "viewed-chat_users", {})
         
         receivers = buyer_receivers + seller_receivers
         return jsonify(receivers), 200
@@ -488,7 +488,7 @@ class UserCustomerServicePropertyChatUserList(MethodView):
                 }
                 chat_user_list.append(chat_info)
                
-            log_action(user['uuid'], user['role'], "viwed-customer-service-property-chat-list", None)
+            log_action(user['uuid'], user['role'], "viwed-customer-service-property-chat-list", {})
             return jsonify(chat_user_list), 200
         else :
             return jsonify([])

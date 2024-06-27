@@ -29,7 +29,7 @@ class DashboardView(MethodView):
         log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
-        log_action(user['uuid'], user['role'], "viewed-dashboard", None)
+        log_action(user['uuid'], user['role'], "viewed-dashboard", {})
         return jsonify({'message':'success'}), 200
 
 
@@ -110,7 +110,10 @@ class AllUserView(MethodView):
         log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
-        log_action(user['uuid'], user['role'], "viewed-users-list", None)
+        if request.args.get('docs') == 'user-docs':
+            log_action(user['uuid'], user['role'], "viewed-users-docs-page", {})
+        else:
+            log_action(user['uuid'], user['role'], "viewed-users-list", {})
         users = list(current_app.db.users.find({}, {'_id': 0, 'otp': 0}))
         return jsonify(users), 200
         
@@ -315,7 +318,7 @@ class GetMediaView(MethodView):
                 media['email'] = user['email']
             except TypeError:
                 continue
-        log_action(logged_in_user['uuid'], logged_in_user['role'], "viewed-media", None)
+        log_action(logged_in_user['uuid'], logged_in_user['role'], "viewed-media", {})
         return jsonify(all_media), 200
 
 
@@ -331,13 +334,12 @@ class ActionLogsView(MethodView):
                     "_id": 0,
                     "user_id": 1,
                     "user_role": 1,
-                    "logs": { "$sortArray": { "input": "$logs", "sortBy": { "timestamp": -1 } } }
+                    "logs" : 1
                 }
             }
         ]
 
         all_logs = list(current_app.db.audit.aggregate(pipeline))
-        
         # Filter logs where user does not exist
         all_logs_with_users = []
         for log in all_logs:
@@ -345,5 +347,4 @@ class ActionLogsView(MethodView):
             if user:
                 log['email'] = user.get('email')
                 all_logs_with_users.append(log)
-            
         return jsonify(all_logs_with_users), 200

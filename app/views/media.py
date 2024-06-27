@@ -1,6 +1,7 @@
 from datetime import datetime
 import werkzeug
 from bson import ObjectId
+import requests
 import os
 import urllib
 from email_validator import validate_email, EmailNotValidError
@@ -93,7 +94,7 @@ class SendMediaView(MethodView):
         if not all_media:
             return jsonify([]), 200
         
-        log_action(user['uuid'], user['role'], "viewed-media",None)      
+        log_action(user['uuid'], user['role'], "viewed-media", {})      
         return jsonify(all_media.get('user_media')), 200
 
 
@@ -302,7 +303,7 @@ class AllDocsView(MethodView):
             doc['id'] = str(doc.pop('_id'))
             formatted_documents.append(doc)
 
-        log_action(user['uuid'], user['role'], "viewed-all-documents", None)
+        log_action(user['uuid'], user['role'], "viewed-all-documents", {})
         return jsonify(formatted_documents), 200
 
 
@@ -325,7 +326,7 @@ class UserDownloadedDocsView(MethodView):
             if not user_docs:
                 return jsonify([]), 200
           
-            log_action(user['uuid'], user['role'], "viewed-downloaded-docs", None)
+            log_action(user['uuid'], user['role'], "viewed-downloaded-docs", {})
             return jsonify(user_docs['downloaded_documents']), 200
         else:
             return jsonify({'error': 'User not found'}), 200
@@ -346,7 +347,7 @@ class UserUploadedDocsView(MethodView):
             user_docs = current_app.db.users_uploaded_docs.find_one({'uuid': user['uuid']}, {'uploaded_documents': 1, '_id': 0})
             if not user_docs:
                 return jsonify([]), 200
-            log_action(user['uuid'], user['role'], "viewed-uploaded-docs", None)
+            log_action(user['uuid'], user['role'], "viewed-uploaded-docs", {})
             return jsonify(user_docs['uploaded_documents']), 200
         else:
             return jsonify({'error': 'User not found'}), 200
@@ -713,3 +714,43 @@ class DocAnswerInsertionView(MethodView):
             return jsonify({'doc_url': doc_url})
         except Exception as e:
             return jsonify({'error': str(e)})
+
+
+class DocumentPrefillAnswerView(MethodView):
+    decorators = [custom_jwt_required()]
+    
+    def post(self):
+        try:
+            log_request()
+            current_user = get_jwt_identity()
+            try:
+                validate_email(current_user)
+                user = current_app.db.users.find_one({'email': current_user})
+            except EmailNotValidError:
+                user = current_app.db.users.find_one({'uuid': current_user})
+
+            if not user:
+                return jsonify({'error': 'User not found'})
+            
+            # Check if all required parameters are present in the request payload
+            required_params = ['street_number', 'street_name', 'city', 'state']
+            if not all(param in request.json for param in required_params):
+                return jsonify({'error': 'Missing required parameters'})
+            payload = {
+                'street_number': request.json['street_number'],
+                'street_name': request.json['street_name'],
+                'city': request.json['city'],
+                'state': request.json['state']
+            }
+            api_url = "http://24.152.187.23:50002/api/v1/search"
+            response = requests.post(api_url, json=payload)
+
+            if response.status_code == 200:
+                prefill_data = response.json()
+                return jsonify(prefill_data)
+            else:
+                return jsonify({'error': "Something went wrong, unable to get prefill data"})
+        
+        except Exception as e:
+            return jsonify({'error': str(e)})
+

@@ -314,6 +314,7 @@ class SavePdfView(MethodView):
 
             document_data['transaction_id'] = transaction_id
             document_data['property_id'] =  transaction['property_data']['property_id']
+            document_data.pop('_id')
             log_action(user['uuid'], user['role'], "signed-property_contract", document_data) 
             return jsonify({'message':'data saved successfully.'})
         except Exception as e:
@@ -409,6 +410,8 @@ class CheckoutView(MethodView):
             # Replace `send_email` with your actual email sending function
             status_code, headers = send_email(subject, message, recipient_email)
             if status_code == 202:
+                transaction.pop('_id')
+                lookup_data.pop('_id')
                 payload = {
                     'transaction':transaction,
                     'property_seller_transaction': lookup_data

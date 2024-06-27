@@ -38,6 +38,7 @@ api_bp.add_url_rule(rule='/docs', view_func=AllDocsView.as_view('docs'))
 api_bp.add_url_rule(rule='/user/docs/date', view_func=UserDocsDateRangeView.as_view('user_docs_date_range'))
 api_bp.add_url_rule(rule='/docs/fill-request/<string:document_id>', view_func=DocumentFillRequestView.as_view('docs_fill_request'))
 api_bp.add_url_rule(rule='/docs/<string:document_id>', view_func=DocAnswerInsertionView.as_view('docs_answer'))
+api_bp.add_url_rule(rule='/docs/prefill-answers', view_func=DocumentPrefillAnswerView.as_view('docs_prefill_answers'))
 
 
 

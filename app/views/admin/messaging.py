@@ -26,22 +26,20 @@ class UserCustomerChatUsersListView(MethodView):
             return jsonify({'error': 'User not found'}), 404
 
         receivers = list(current_app.db.messages.find({},{'_id': 0}).sort('_id', -1))
-        
-        if len(receivers) != 0:  
-            for receiver in receivers:
-                chat_user = current_app.db.users.find_one({'uuid': receiver['user_id']})
-                if not chat_user:
-                    return jsonify({'error': 'Chat user not found'}), 404
-                
-                unseen_message_count = len(list(filter(lambda msg: not msg.get("is_response") and not msg.get("is_seen"), receiver['messages'])))
-                receiver['unseen_message_count'] = unseen_message_count
-                receiver['name'] = chat_user['first_name'] + ' ' + chat_user['last_name'] 
-                receiver['email'] = chat_user['email']
-                receiver.pop('messages')
-                
-            log_action(user['uuid'], user['role'], "viwed-customer-chat-users", None)
-            return jsonify(receivers), 200
-        return jsonify([])
+       
+        for receiver in receivers:
+            chat_user = current_app.db.users.find_one({'uuid': receiver['user_id']})
+            if not chat_user:
+                return jsonify({'error': 'Chat user not found'}), 404
+            
+            unseen_message_count = len(list(filter(lambda msg: not msg.get("is_response") and not msg.get("is_seen"), receiver['messages'])))
+            receiver['unseen_message_count'] = unseen_message_count
+            receiver['name'] = chat_user['first_name'] + ' ' + chat_user['last_name'] 
+            receiver['email'] = chat_user['email']
+            receiver.pop('messages')
+            
+        log_action(user['uuid'], user['role'], "viwed-customer-chat-users", {})
+        return jsonify(receivers), 200       
 
 
 class SaveAdminResponseView(MethodView):
@@ -298,6 +296,6 @@ class UserCustomerPropertyChatUsersListView(MethodView):
                 receiver['email'] = chat_user['email']
                 receiver.pop('message_content')
                 
-            log_action(user['uuid'], user['role'], "viwed-property-chat-users", None)
+            log_action(user['uuid'], user['role'], "viwed-property-chat-users", {})
             return jsonify(receivers), 200
         return jsonify([]), 200

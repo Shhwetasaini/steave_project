@@ -63,7 +63,7 @@ class SellerPropertyListView(MethodView):
             else:
                 continue
       
-        log_action(user['uuid'],user['role'], "viewed-properties", None)
+        log_action(user['uuid'],user['role'], "viewed-properties", {})
         return jsonify(property_list), 200
 
 
@@ -116,7 +116,7 @@ class AllPropertyListView(MethodView):
             else:
                 continue  # Invalid/Incomplete transaction properties
         
-        log_action(user['uuid'],user['role'], "viewed-all-properties", None)     
+        log_action(user['uuid'],user['role'], "viewed-all-properties", {})     
         return jsonify(property_list), 200
 
 
@@ -410,7 +410,7 @@ class PanoramicImageView(MethodView):
                 '3d_images': sorted(panorama['3d_images'], key=lambda x: x['order'])
             })
 
-        log_action(user['uuid'], user['role'], "viewed-panoramic-images", None)
+        log_action(user['uuid'], user['role'], "viewed-panoramic-images", {})
         return jsonify(sorted_panoramas), 200
     
     def delete(self, property_id, property_version, order):

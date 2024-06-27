@@ -27,7 +27,7 @@ class AllDocumentsView(MethodView):
         user = current_app.db.users.find_one({'email': current_user})
         
         documents = list(current_app.db.documents.find({},{'_id':False}))
-        log_action(user['uuid'], user['role'], "viewed-all-documents", None)
+        log_action(user['uuid'], user['role'], "viewed-all-documents", {})
         return jsonify(documents), 200
          
 
@@ -85,7 +85,7 @@ class FlFormsView(MethodView):
         
         root_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'FL_Forms')
         folders_and_files = get_folders_and_files(root_dir)
-        log_action(user['uuid'], user['role'], "viewed-FL-forms", None)
+        log_action(user['uuid'], user['role'], "viewed-FL-forms", {})
         return jsonify(folders_and_files), 200
        
 
@@ -98,7 +98,7 @@ class MnFormsView(MethodView):
         user = current_app.db.users.find_one({'email': current_user})
         root_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms')
         folders_and_files = get_folders_and_files(root_dir)
-        log_action(user['uuid'], user['role'], "viewed-ML-forms", None)
+        log_action(user['uuid'], user['role'], "viewed-ML-forms", {})
         return jsonify(folders_and_files), 200
 
 
@@ -335,7 +335,7 @@ class DownloadedDocsView(MethodView):
        
         user = current_app.db.users.find_one({'uuid': uuid}, {'_id': 0})
         if user:
-            log_action(logged_in_user['uuid'], logged_in_user['role'], "viewed-downloaded-docs", None)
+            log_action(logged_in_user['uuid'], logged_in_user['role'], "viewed-downloaded-docs", {})
             return jsonify(user), 200
         else:
             return jsonify({"error":"User does not exist!"}), 404
@@ -350,7 +350,7 @@ class UploadedDocsView(MethodView):
         logged_in_user = current_app.db.users.find_one({'email': current_user})
         user = current_app.db.users.find_one({'uuid': uuid}, {'_id': 0})
         if user:
-            log_action(logged_in_user['uuid'], logged_in_user['role'], "viewed-downloaded-docs", None)
+            log_action(logged_in_user['uuid'], logged_in_user['role'], "viewed-downloaded-docs", {})
             return jsonify(user), 200
         else:
             return jsonify({"error":"User does not exist!"}), 404
@@ -387,7 +387,7 @@ class SingleFormQuestionView(MethodView):
                 'link': link,
                 'answer_locations':[]
             }
-            
+            question_data.pop('_id')
             current_app.db.doc_questions_answers.insert_one(question_data)
 
             log_action(user['uuid'], user['role'], "added-question-on-document", question_data)
