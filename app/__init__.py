@@ -35,8 +35,8 @@ def create_app(config_name):
         mongo_client = MongoClient(
             app.config['DB_HOST'], 
             app.config['DB_PORT'], 
-            #username=app.config['DB_USER'], 
-            #password=app.config['DB_PASSWD']
+            username=app.config['DB_USER'], 
+            password=app.config['DB_PASSWD']
         )
         # Get the database
         app.db = mongo_client.get_database(app.config['DB_NAME'])
