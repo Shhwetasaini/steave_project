@@ -94,9 +94,9 @@ api_bp.add_url_rule(rule='/admin/forms/question', view_func=SingleFormQuestionVi
 api_bp.add_url_rule(rule='/users/buyer/sellers/chat', view_func=BuyerSellersChatView.as_view('buyer_sellers_chat'), methods=['POST'])
 api_bp.add_url_rule(rule='/users/buyer/sellers/chat/<property_id>/<user_id>', view_func=BuyerSellersChatView.as_view('buyer_seller_message'), methods=['GET'])
 api_bp.add_url_rule(rule='/users/chat/list', view_func=BuyerSellerChatUsersListView.as_view('buyer_seller_chat_users_list'))
+api_bp.add_url_rule(rule='/users/buyer/seller/chat/search', view_func=BuyerSellerChatSearchView.as_view('buyer_sellers_chat_search'))
 
 #User-Customer-service property chat apis
 api_bp.add_url_rule(rule='/users/customer/property/chat', view_func=UserCustomerServicePropertySendMesssageView.as_view('user-customer-service_chat'), methods=['POST'])
 api_bp.add_url_rule(rule='/users/customer/property/chat/<property_id>', view_func=UserCustomerServicePropertySendMesssageView.as_view('user-customer-service_message'), methods=['GET'])
 api_bp.add_url_rule(rule='/users/customer/property/chat/list', view_func=UserCustomerServicePropertyChatUserList.as_view('user_customer_property_chat_list'))
-

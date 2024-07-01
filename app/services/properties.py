@@ -133,31 +133,112 @@ def save_panoramic_image(panoramic_image, user, property_id):
     return {'image_url':image_url, 'filename': filename}
 
 
-def get_receivers(user_role_key, user_uuid):
-            pipeline = [
-                {
-                    '$match': {
-                        user_role_key: user_uuid
-                    }
-                },
-                {
-                    '$project': {
-                        '_id': 0,
-                        'property_id': 1,
-                        'other_user_id': f"${'buyer_id' if user_role_key == 'seller_id' else 'seller_id'}",
-                        'last_message': {'$arrayElemAt': ['$message_content', -1]}
+def get_receivers(user_role_key, user_uuid, query=None):
+    pipeline = [
+        {
+            '$match': {
+                user_role_key: user_uuid
+            }
+        },
+        {
+            '$project': {
+                '_id': 0,
+                'property_id': 1,
+                'other_user_id': f"${'buyer_id' if user_role_key == 'seller_id' else 'seller_id'}",
+                'last_message': {'$arrayElemAt': ['$message_content', -1]}
+            }
+        }
+    ]
+    receivers = list(current_app.db.buyer_seller_messaging.aggregate(pipeline))
+    if query:
+        filtered_receivers = []
+        query_lower = query.lower()
+        for receiver in receivers:
+            other_user = current_app.db.users.find_one({'uuid': receiver['other_user_id']}, {'email': 1, 'first_name': 1, 'last_name': 1, 'profile_pic': 1, '_id': 0})
+            if other_user:
+                if query_lower in (other_user.get('first_name') or '').lower() or \
+                   query_lower in (other_user.get('last_name') or '').lower() or \
+                   query_lower in (other_user.get('email') or '').lower():
+                    receiver['email'] = other_user.get('email')
+                    receiver['first_name'] = other_user.get('first_name')
+                    receiver['last_name'] = other_user.get('last_name')
+                    receiver['profile_pic'] = other_user.get('profile_pic')
+                    filtered_receivers.append(receiver)
+        return filtered_receivers
+    
+    for receiver in receivers:
+        other_user = current_app.db.users.find_one({'uuid': receiver['other_user_id']}, {'email': 1, 'first_name': 1, 'last_name': 1, 'profile_pic': 1, '_id': 0})
+        property_address = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, '_id': 0})
+        receiver['property_address'] = property_address['address'] if property_address else None
+        receiver['email'] = other_user.get('email') if other_user else None
+        receiver['first_name'] = other_user.get('first_name') if other_user else None
+        receiver['last_name'] = other_user.get('last_name') if other_user else None
+        receiver['profile_pic'] = other_user.get('profile_pic') if other_user else None
+        receiver['user_id'] = receiver.pop('other_user_id')
+        receiver['time'] = datetime.now().strftime("%Y%m%d%H%M%S")
+    return receivers
+
+
+def search_messages(user_uuid, query):
+    pipeline = [
+        {
+            '$match': {
+                '$or': [
+                    {'buyer_id': user_uuid},
+                    {'seller_id': user_uuid}
+                ]
+            }
+        },
+        {
+            '$unwind': '$message_content'
+        },
+        {
+            '$match': {
+                '$or': [
+                    {'message_content.message': {'$regex': query, '$options': 'i'}},
+                    {'message_content.media': {'$regex': query, '$options': 'i'}}
+                ]
+            }
+        },
+        {
+            '$project': {
+                '_id': 0,
+                'property_id': 1,
+                'message': '$message_content.message',
+                'media': '$message_content.media',
+                'timestamp': '$message_content.timestamp',
+                'user_id': {
+                    '$cond': {
+                        'if': {'$eq': ['$buyer_id', user_uuid]},
+                        'then': '$seller_id',
+                        'else': '$buyer_id'
                     }
                 }
-            ]
-            receivers = list(current_app.db.buyer_seller_messaging.aggregate(pipeline))
-            for receiver in receivers:
-                other_user = current_app.db.users.find_one({'uuid': receiver['other_user_id']}, {'email': 1, 'first_name': 1, 'last_name': 1, 'profile_pic': 1, '_id': 0})
-                property_address = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, '_id': 0})
-                receiver['property_address'] = property_address['address'] if property_address else None
-                receiver['email'] = other_user.get('email') if other_user else None
-                receiver['first_name'] = other_user.get('first_name') if other_user else None
-                receiver['last_name'] = other_user.get('last_name') if other_user else None
-                receiver['profile_pic'] = other_user.get('profile_pic') if other_user else None
-                receiver['user_id'] = receiver.pop('other_user_id')
-                receiver['time'] = datetime.now().strftime("%Y%m%d%H%M%S")
-            return receivers
+            }
+        },
+        {
+            '$lookup': {
+                'from': 'users',
+                'localField': 'user_id',
+                'foreignField': 'uuid',
+                'as': 'user_details'
+            }
+        },
+        {
+            '$unwind': '$user_details'
+        },
+        {
+            '$project': {
+                'property_id': 1,
+                'message': 1,
+                'media': 1,
+                'timestamp': 1,
+                'user_details.email': 1,
+                'user_details.first_name': 1,
+                'user_details.last_name': 1,
+                'user_details.profile_pic': 1
+            }
+        }
+    ]
+    messages = list(current_app.db.buyer_seller_messaging.aggregate(pipeline))
+    return messages

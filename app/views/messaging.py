@@ -11,7 +11,7 @@ import werkzeug
 from flask import current_app, url_for
 from app.services.admin import log_request
 from app.services.authentication import custom_jwt_required , log_action
-from app.services.properties import get_receivers
+from app.services.properties import get_receivers, search_messages
 
 
 class SaveUserMessageView(MethodView):
@@ -339,6 +339,44 @@ class BuyerSellerChatUsersListView(MethodView):
         
         receivers = buyer_receivers + seller_receivers
         return jsonify(receivers), 200
+
+
+class BuyerSellerChatSearchView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def get(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 200
+
+        user_role = user.get('role')
+        if user_role == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 200
+
+        query = request.args.get('query')
+        if not query:
+            return jsonify({"error": "Query parameter is required"}), 400
+
+        query_lower = query.lower()
+
+        # Search in chat users list (first_name, last_name, email)
+        buyer_receivers = get_receivers('buyer_id', user['uuid'], query_lower)
+        seller_receivers = get_receivers('seller_id', user['uuid'], query_lower)
+        receivers = buyer_receivers + seller_receivers
+        # Search in messages
+        message_results = search_messages(user['uuid'], query_lower)
+        return jsonify({
+            'chat_users': receivers,
+            'message_results': message_results
+        }), 200
 
 
 class UserCustomerServicePropertySendMesssageView(MethodView):
