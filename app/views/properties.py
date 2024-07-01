@@ -274,6 +274,11 @@ class PanoramicImageView(MethodView):
 
         if not user:
             return jsonify({'error': 'User not found'}), 200
+        
+        user_role = user.get('role')
+        if user_role == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 200
+
 
         if 'panoramic_image' not in request.files:
             return jsonify({"error": "No image part"}), 200
@@ -395,6 +400,11 @@ class PanoramicImageView(MethodView):
 
         if not user:
             return jsonify({'error': 'User not found'}), 200
+        
+        user_role = user.get('role')
+        if user_role == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 200
+
 
         logging.info(f"Fetching all panoramic images for property ID: {property_id}")
         user_property = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
@@ -491,6 +501,11 @@ class PropertyImageLabelUpdateView(MethodView):
         if not user:
             return jsonify({'error': 'User not found'}), 200
         
+        user_role = user.get('role')
+        if user_role == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 200
+
+        
         data = request.json
         property_id = data.get('property_id')
         image_name = data.get('image_name')
@@ -516,6 +531,7 @@ class PropertyImageLabelUpdateView(MethodView):
             return jsonify({"message": "Image updated successfully"})
         else:
             return jsonify({"error": "Image not found or update failed"})
+
 
 class PropertyImageDeleteView(MethodView): 
     decorators = [custom_jwt_required()]
@@ -583,3 +599,60 @@ class PropertyImageDeleteView(MethodView):
 
         log_action(user['uuid'], user['role'], "deleted-property-image", data)
         return jsonify({'message': 'Image deleted successfully'})
+
+
+class PropertySearchView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def post(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        user_role = user.get('role')
+        if user_role == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 403
+
+        data = request.json
+        location = data.get('location_point', [])
+
+        if len(location) != 4:
+            return jsonify({'error': 'Invalid input data. Four coordinates are required.'}), 400
+        
+        # Extract bounding box coordinates
+        min_lat = min(point["lat"] for point in location)
+        max_lat = max(point["lat"] for point in location)
+        min_lng = min(point["lng"] for point in location)
+        max_lng = max(point["lng"] for point in location)
+
+        # Query to find properties within the bounding box
+        pipeline = [
+            {
+                '$match': {
+                    'latitude': {'$gte': min_lat, '$lte': max_lat},
+                    'longitude': {'$gte': min_lng, '$lte': max_lng},
+                    'status': {'$ne': 'cancelled'}
+                }
+            }
+        ]
+
+        properties_collection = current_app.db.properties
+        filtered_properties = list(properties_collection.aggregate(pipeline))
+        
+        # Fetch property IDs
+        valid_properties = []
+        for property in filtered_properties:
+            property['_id'] = str(property.pop('_id'))
+            valid_property = current_app.db.property_seller_transaction.find_one({'property_id': property['_id']})
+            if valid_property:
+                valid_properties.append(property)
+
+        return jsonify(valid_properties), 200
