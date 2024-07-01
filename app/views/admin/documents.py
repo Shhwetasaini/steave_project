@@ -387,13 +387,11 @@ class SingleFormQuestionView(MethodView):
                 'link': link,
                 'answer_locations':[]
             }
-            question_data.pop('_id')
             current_app.db.doc_questions_answers.insert_one(question_data)
-
+            question_data.pop('_id')
             log_action(user['uuid'], user['role'], "added-question-on-document", question_data)
 
             return jsonify({'message': 'questions added successfully'})
-
         except Exception as e:
             return jsonify({'error': str(e)}), 500
         
@@ -436,6 +434,9 @@ class SingleFormQuestionView(MethodView):
                 log_action(user['uuid'], user['role'], "updated-question-on-document", log_data)
                 return jsonify({'message': 'Question updated successfully'}), 200
             elif currentRect:
+                if currentRect[0].get('answerInputType') == 'single-checkbox' or currentRect[0].get('answerInputType') == 'multiple-checkbox':
+                    if currentRect[0].get('answerOutputType') != 'boolean':
+                        return jsonify({'error': 'Answer Data Type must be Boolean for checkbox questions'}), 400
                 question = current_app.db.doc_questions_answers.find_one({'_id': ObjectId(question_id), 'document_id':doc_id})
                 if question:
                     answer_locations = question.get('answer_locations', [])

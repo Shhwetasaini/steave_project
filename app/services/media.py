@@ -3,6 +3,7 @@ import io
 import shutil
 import base64
 import os
+from datetime import datetime
 
 from PyPDF2 import PdfReader, PdfWriter
 
@@ -51,7 +52,30 @@ def create_user_document(original_file_path, new_doc_path, user_media_dir, filen
         return {'doc_url': doc_url}
     except Exception as e:
         return {"error": str(e)}
+
+
+# Function to check if the answer is a datetime string
+def is_datetime_string(s):
+    try:
+        datetime.fromisoformat(s)
+        return True
+    except ValueError:
+        return False
+
+
+def check_answer_type(answer):
+    if type(answer) == int or type(answer) == float:
+        answer_type = 'number'
+    elif type(answer) == str:
+        if is_datetime_string(answer):
+            answer_type = 'dateTime'
+        else:
+            answer_type = 'text'
+    elif type(answer) == bool:
+        answer_type = 'boolean'
     
+    return answer_type
+
 
 def insert_answer_in_pdf(doc_path, answer_locations, answer, user, value, filename):
     try:
@@ -73,23 +97,23 @@ def insert_answer_in_pdf(doc_path, answer_locations, answer, user, value, filena
 
                 # Add all answer locations to the overlay
                 for location in page_answer_locations:
+                    answer_type = check_answer_type(answer)
                     if location['answerInputType'] == 'single-checkbox':
-                        if answer != True:
-                            return {'error': 'answer value must be true for single-checkbox questions'}
-
+                        if answer_type != location['answerOutputType']:
+                            return {'error': 'Answer data type is incorrect for this question'}
                         x = location['startX']
                         y = letter[1] - location['endY'] + 6
                         can.drawString(x, y, '✔')
                     elif location['answerInputType'] == 'multiple-checkbox':
-                        if answer != True or not value:
-                            return {'error': 'answer value must be true and option value is required for multiple-checkbox questions'}
+                        if answer_type != location['answerOutputType'] or not value:
+                            return {'error': 'Answer data type is correct for this answer or missing value'}
                         if location['value'] == value:
                             x = location['startX']
                             y = letter[1] - location['endY'] + 6
                             can.drawString(x, y, '✔')
                     elif location['answerInputType'] == 'multiline':
-                        if type(answer) != str:
-                            return {'error': 'Only string values allowed for multiline answer'}
+                        if answer_type != location['answerOutputType']:
+                            return {'error': 'Answer data type is incorrect for this question'}
                         position = location['position']
                         text = answer
                         # Filter locations with the same position
@@ -136,8 +160,8 @@ def insert_answer_in_pdf(doc_path, answer_locations, answer, user, value, filena
                                         text_index = len(text)
                                         break
                     else:
-                        if type(answer) != str:
-                            return {'error': 'Only string values allowed for single-line answer'}
+                        if answer_type != location['answerOutputType']:
+                            return {'error': 'Answer data type is incorrect for this question'}
                         x = location['startX']
                         y = letter[1] - location['endY'] + 2
                         max_width = location['endX'] - location['startX']
@@ -145,7 +169,7 @@ def insert_answer_in_pdf(doc_path, answer_locations, answer, user, value, filena
                         for i in range(len(text), -1, -1):
                             if can.stringWidth(text[:i], "Helvetica", 12) <= max_width:
                                 can.drawString(x, y, text[:i])
-                                break
+                                break   
 
                 can.save()
 
