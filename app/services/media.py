@@ -107,10 +107,15 @@ def insert_answer_in_pdf(doc_path, answer_locations, answer, user, value, filena
                     elif location['answerInputType'] == 'multiple-checkbox':
                         if answer_type != location['answerOutputType'] or not value:
                             return {'error': 'Answer data type is correct for this answer or missing value'}
-                        if location['value'] == value:
-                            x = location['startX']
-                            y = letter[1] - location['endY'] + 6
-                            can.drawString(x, y, '✔')
+                        positions = [loc for loc in page_answer_locations if loc['position'] == position]
+                        for pos in positions:
+                            if len(value) == 1:
+                                value = value[0]
+
+                            if location['value'] == value:
+                                x = location['startX']
+                                y = letter[1] - location['endY'] + 6
+                                can.drawString(x, y, '✔')
                     elif location['answerInputType'] == 'multiline':
                         if answer_type != location['answerOutputType']:
                             return {'error': 'Answer data type is incorrect for this question'}

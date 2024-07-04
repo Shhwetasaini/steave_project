@@ -11,7 +11,12 @@ import werkzeug
 from flask import current_app, url_for
 from app.services.admin import log_request
 from app.services.authentication import custom_jwt_required , log_action
-from app.services.properties import get_receivers, search_messages
+from app.services.properties import (
+    get_receivers, 
+    search_messages, 
+    search_customer_property_mesage,
+    search_customer_service_mesage
+)
 
 
 class SaveUserMessageView(MethodView):
@@ -373,6 +378,11 @@ class BuyerSellerChatSearchView(MethodView):
         receivers = buyer_receivers + seller_receivers
         # Search in messages
         message_results = search_messages(user['uuid'], query_lower)
+        property_message_results = search_customer_property_mesage(query,  user['uuid'])
+        message_results = message_results + property_message_results[0]
+        receivers  = receivers + property_message_results[1]
+        message_results = message_results + search_customer_service_mesage(query, user['uuid'])
+        log_action(user['uuid'], user['role'], "searched-on-chat-page", {'searched_query': query})
         return jsonify({
             'chat_users': receivers,
             'message_results': message_results
@@ -522,7 +532,7 @@ class UserCustomerServicePropertyChatUserList(MethodView):
                 chat_info = {
                     'property_id': chat['property_id'],
                     'property_address': chat['property_address'],
-                    'owner_name': 'Customer-Service'
+                    'name': 'Customer-Service'
                 }
                 chat_user_list.append(chat_info)
                
