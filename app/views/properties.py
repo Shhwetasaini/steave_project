@@ -630,44 +630,50 @@ class PropertySearchView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'}), 404
+            return jsonify({'error': 'User not found'})
         
         user_role = user.get('role')
         if user_role == 'realtor':
-            return jsonify({'error': 'Unauthorized access'}), 403
-
+            return jsonify({'error': 'Unauthorized access'})
+        
         data = request.json
-        location = data.get('location_point', [])
+        locations = data.get('location_points', [])
 
-        if len(location) != 4:
-            return jsonify({'error': 'Invalid input data. Four coordinates are required.'}), 400
-        
-        # Extract bounding box coordinates
-        min_lat = min(point["lat"] for point in location)
-        max_lat = max(point["lat"] for point in location)
-        min_lng = min(point["lng"] for point in location)
-        max_lng = max(point["lng"] for point in location)
+        if not locations:
+            return jsonify({'error': 'Invalid input data. At least one set of four coordinates is required.'})
 
-        # Query to find properties within the bounding box
-        pipeline = [
-            {
-                '$match': {
-                    'latitude': {'$gte': min_lat, '$lte': max_lat},
-                    'longitude': {'$gte': min_lng, '$lte': max_lng},
-                    'status': {'$ne': 'cancelled'}
+        all_valid_properties = []
+
+        for location in locations:
+            if len(location) != 4:
+                return jsonify({'error': 'Invalid input data. Each set must contain exactly four coordinates.'})
+
+            # Extract bounding box coordinates
+            min_lat = min(point["lat"] for point in location)
+            max_lat = max(point["lat"] for point in location)
+            min_lng = min(point["lng"] for point in location)
+            max_lng = max(point["lng"] for point in location)
+
+            # Query to find properties within the bounding box
+            pipeline = [
+                {
+                    '$match': {
+                        'latitude': {'$gte': min_lat, '$lte': max_lat},
+                        'longitude': {'$gte': min_lng, '$lte': max_lng},
+                        'status': {'$ne': 'cancelled'}
+                    }
                 }
-            }
-        ]
+            ]
 
-        properties_collection = current_app.db.properties
-        filtered_properties = list(properties_collection.aggregate(pipeline))
-        
-        # Fetch property IDs
-        valid_properties = []
-        for property in filtered_properties:
-            property['_id'] = str(property.pop('_id'))
-            valid_property = current_app.db.property_seller_transaction.find_one({'property_id': property['_id']})
-            if valid_property:
-                valid_properties.append(property)
+            properties_collection = current_app.db.properties
+            filtered_properties = list(properties_collection.aggregate(pipeline))
 
-        return jsonify(valid_properties), 200
+            # Fetch property IDs and filter valid properties
+            for property in filtered_properties:
+                property['_id'] = str(property.pop('_id'))
+                valid_property = current_app.db.property_seller_transaction.find_one({'property_id': property['_id']})
+                if valid_property:
+                    all_valid_properties.append(property)
+
+        log_action(user['uuid'], user['role'], "searched-properties", {'payload_data': data})
+        return jsonify(all_valid_properties)

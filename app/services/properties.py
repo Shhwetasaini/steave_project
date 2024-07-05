@@ -27,27 +27,30 @@ def create_property(property_data):
 
 
 def send_email(subject, message, recipient):
-    # Replace 'YOUR_SENDGRID_API_KEY' with your actual SendGrid API key
-    sg = sendgrid.SendGridAPIClient(current_app.config['SENDGRID_API_KEY'])
+    try:
+        # Replace 'YOUR_SENDGRID_API_KEY' with your actual SendGrid API key
+        sg = sendgrid.SendGridAPIClient(current_app.config['SENDGRID_API_KEY'])
 
-    # Set up the sender and recipient
-    from_email = Email(current_app.config['MAIL_USERNAME'])  # Change to your verified sender
-    to_email = To(recipient)  # Change to your recipient
+        # Set up the sender and recipient
+        from_email = Email(current_app.config['MAIL_USERNAME'])  # Change to your verified sender
+        to_email = To(recipient)  # Change to your recipient
 
-    # Create a Mail object
-    mail = Mail(from_email, to_email)
+        # Create a Mail object
+        mail = Mail(from_email, to_email)
 
-    # Set the email subject
-    mail.subject = subject
+        # Set the email subject
+        mail.subject = subject
 
-    # Set the email content (plain text or HTML)
-    mail.content = sendgrid.helpers.mail.Content("text/plain", message)  # Changed 'contents' to 'content'
+        # Set the email content (plain text or HTML)
+        mail.content = sendgrid.helpers.mail.Content("text/plain", message)  # Changed 'contents' to 'content'
 
-    # Send an HTTP POST request to /mail/send
-    response = sg.send(mail)
-    
-    # Return status code and headers
-    return response.status_code, response.headers
+        # Send an HTTP POST request to /mail/send
+        response = sg.send(mail)
+        
+        # Return status code and headers
+        return response.status_code, response.headers
+    except Exception as e:
+        return 400 , {"error": str(e)}
 
 
 def get_client_ip():
@@ -117,21 +120,23 @@ def validate_address(address):
     return False
 
 def save_panoramic_image(panoramic_image, user, property_id):
-    org_filename = secure_filename(panoramic_image.filename)
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    filename = f"{timestamp}_{org_filename}"
-    user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id), 'panoramic_image')
-    os.makedirs(user_media_dir, exist_ok=True)
+    try:
+        org_filename = secure_filename(panoramic_image.filename)
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = f"{timestamp}_{org_filename}"
+        user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id), 'panoramic_image')
+        os.makedirs(user_media_dir, exist_ok=True)
 
-    if os.path.exists(os.path.join(user_media_dir, filename)):
-        return {'error': 'File with the same name already exists in the folder'}
-       
-    image_path = os.path.join(user_media_dir, filename)
-    panoramic_image.save(image_path)
-    image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), 'panoramic_image', org_filename))
+        if os.path.exists(os.path.join(user_media_dir, filename)):
+            return {'error': 'File with the same name already exists in the folder'}
+        
+        image_path = os.path.join(user_media_dir, filename)
+        panoramic_image.save(image_path)
+        image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), 'panoramic_image', org_filename))
 
-    return {'image_url':image_url, 'filename': filename}
-
+        return {'image_url':image_url, 'filename': filename}
+    except Exception as e:
+        return  {'error': str(e)}
 
 def get_receivers(user_role_key, user_uuid, query=None):
     pipeline = [
@@ -163,6 +168,7 @@ def get_receivers(user_role_key, user_uuid, query=None):
                     receiver['first_name'] = other_user.get('first_name')
                     receiver['last_name'] = other_user.get('last_name')
                     receiver['profile_pic'] = other_user.get('profile_pic')
+                    receiver['user_id'] = receiver.pop('other_user_id')
                     filtered_receivers.append(receiver)
         return filtered_receivers
     
@@ -242,3 +248,122 @@ def search_messages(user_uuid, query):
     ]
     messages = list(current_app.db.buyer_seller_messaging.aggregate(pipeline))
     return messages
+
+
+def search_customer_property_mesage(query, user_uuid):
+    # Search criteria
+    search_criteria = {
+        "$and": [
+            {"user_id": user_uuid},
+            {
+                "$or": [
+                    {"property_address": {"$regex": query, "$options": "i"}},
+                    {"message_content.message": {"$regex": query, "$options": "i"}},
+                    {"message_content.media": {"$regex": query, "$options": "i"}}
+                ]
+            }
+        ]
+    }
+
+
+    results = current_app.db.users_customer_service_property_chat.find(search_criteria)
+    response = []
+    user_list = []
+    user_results = current_app.db.users_customer_service_property_chat.find()
+    name = "Customer-Service"
+    for user_result in user_results:
+        if query.lower() in name.lower():
+            user_dict =  {
+                "email": "",
+                "first_name": "Customer",
+                "last_message": {},
+                "last_name": "Service",
+                "profile_pic": "",
+                "property_id": user_result.get('property_id'),
+                "user_id": ""
+            }
+            user_list.append(user_dict)
+    for result in results:
+        matched_columns = []
+        if query.lower() in result.get('property_address', '').lower():
+            matched_columns.append({
+                "matched_column": "property_address",
+                "matched_value": result.get('property_address')
+            })
+
+        for message in result.get('message_content', []):
+            if 'message' in message and query.lower() in message['message'].lower():
+                matched_columns.append({
+                    "matched_column": "message",
+                    "matched_value": message['message']
+                })
+            elif 'media' in message and query.lower() in message['media'].lower():
+                matched_columns.append({
+                    "matched_column": "media",
+                    "matched_value": message['media']
+                })
+
+            if matched_columns:
+                for matched in matched_columns:
+                    response.append({
+                        "property_id": result.get('property_id'),
+                        "timestamp": message.get('timestamp'),
+                        matched["matched_column"]: matched["matched_value"],
+                        "user_details": {
+                            "email": "",
+                            "first_name": "Customer",
+                            "last_name": "Service",
+                            "profile_pic": ""
+                        }
+                    })
+                matched_columns = []
+
+    return (response, user_list)
+
+
+def search_customer_service_mesage(query, user_uuid):
+    # Search criteria
+    
+    search_criteria = {
+        "$and": [
+            {"user_id": user_uuid},
+            {
+                "$or": [
+                    {"messages.message": {"$regex": query, "$options": "i"}},
+                    {"messages.media": {"$regex": query, "$options": "i"}}
+                ]
+            }
+        ]
+    }
+
+    results = current_app.db.messages.find(search_criteria)
+    response = []
+    for result in results:
+        matched_columns = []
+        for message in result.get('messages', []):
+            if 'message' in message and query.lower() in message['message'].lower():
+                matched_columns.append({
+                    "matched_column": "message",
+                    "matched_value": message['message']
+                })
+            elif 'media' in message and query.lower() in message['media'].lower():
+                matched_columns.append({
+                    "matched_column": "media",
+                    "matched_value": message['media']
+                })
+
+            if matched_columns:
+                for matched in matched_columns:
+                    response.append({
+                        "timestamp": message.get('timestamp'),
+                        matched["matched_column"]: matched["matched_value"],
+                        "user_details": {
+                            "email": "",
+                            "first_name": "Customer",
+                            "last_name": "Support",
+                            "profile_pic": ""
+                        }
+                    })
+                matched_columns = []
+
+    return response
