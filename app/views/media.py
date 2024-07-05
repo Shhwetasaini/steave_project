@@ -598,7 +598,7 @@ class DocAnswerInsertionView(MethodView):
             question_id = request.json['question_id']
             answer = request.json['answer']
             doc_url = request.json['doc_url']
-            value = request.json.get('value')  #for multiple-checkbox
+            values = request.json.get('values')  #for multiple-checkbox
 
             # Retrieve original PDF from MongoDB
             document = current_app.db.documents.find_one({'_id': ObjectId(document_id)})
@@ -644,7 +644,7 @@ class DocAnswerInsertionView(MethodView):
             doc_path = os.path.join(current_app.config['UPLOAD_FOLDER'], relative_path_decoded)
             
             inserted_answer = insert_answer_in_pdf(
-                doc_path, answer_locations, answer, user, value, user_document.get('name')
+                doc_path, answer_locations, answer, user, values, user_document.get('name')
             )
 
             if inserted_answer.get('error'):
@@ -753,4 +753,3 @@ class DocumentPrefillAnswerView(MethodView):
         
         except Exception as e:
             return jsonify({'error': str(e)})
-

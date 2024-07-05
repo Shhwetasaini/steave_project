@@ -171,7 +171,10 @@ class PropertyUpdateView(MethodView):
             updatable_fields = [
                 'description', 'price', 'size',
                 'name', 'status', 'address', 'state', 'city',
-                'latitude', 'longitude', 'beds', 'baths', 'kitchen'
+                'latitude', 'longitude', 'beds', 'baths', 'kitchen',
+                'full_bathrooms', 'half_bathrooms', 'built_in', 'attached_garage',
+                'garage_size', 'appliances', 'kitchen_features', 'features'
+                'type_and_styles', 'materials'
             ]
 
             data = request.form 
@@ -203,22 +206,33 @@ class PropertyUpdateView(MethodView):
                         
                         update_data[key] = value
 
-                    elif key in ["price", "longitude", "latitude"]:
+                    elif key in ["price", "longitude", "latitude", "size", "garage_size"]:
                         try:
                             update_data[key] = float(value)
                         except ValueError:
                             if value.strip() != '':
-                                return jsonify({'error':'only float values are accepted for price, longitude, latitude'})
+                                return jsonify({'error':'only float values are accepted for price, longitude, latitude, size, garage_size'})
                             pass
                     
-                    elif key in ["beds", "baths", "kitchen"]:
+                    elif key in ["beds", "baths", "kitchen", "full_bathrooms", "half_bathrooms", "attached_garage"]:
                         try:
                             update_data[key] = int(value)
                         except ValueError:
                             if value.strip() != '':
-                                return jsonify({'error':'only integer values are accepted for beds, baths, kitchen'})
+                                return jsonify({'error':'only integer values are accepted for beds, baths, kitchen, full_bathrooms, half_bathrooms, attached_garage'})
                             pass  
-                    
+                    elif key in ["appliances", "kitchen_features", "features", "type_and_styles", "materials"]:
+                        try:
+                            value = json.loads(value)
+                        except json.JSONDecodeError as e:
+                            return {'error':f"JSON decoding error: {e}"}
+                        if type(value) != list:
+                            return jsonify({'error':'only array of values are accepted for appliances, kitchen_features, features, type_and_styles, materials'}) 
+                        
+                        current_app.db.properties.update_one(
+                            {'_id': ObjectId(property_id)},
+                            {'$set': {key:value}}
+                        )  
                     else:
                         update_data[key] = value
                 
@@ -407,6 +421,7 @@ class PanoramicImageView(MethodView):
 
 
         logging.info(f"Fetching all panoramic images for property ID: {property_id}")
+
         user_property = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
         seller_transaction_property = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
         if not user_property or not seller_transaction_property:

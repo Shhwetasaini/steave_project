@@ -77,11 +77,10 @@ def check_answer_type(answer):
     return answer_type
 
 
-def insert_answer_in_pdf(doc_path, answer_locations, answer, user, value, filename):
+def insert_answer_in_pdf(doc_path, answer_locations, answer, user, values, filename):
     try:
         reader = PdfReader(doc_path)
         writer = PdfWriter()
-
         # Iterate over each page of the original PDF
         for page_num in range(len(reader.pages)):
             # Get the page object
@@ -94,7 +93,6 @@ def insert_answer_in_pdf(doc_path, answer_locations, answer, user, value, filena
                 packet = io.BytesIO()
                 can = canvas.Canvas(packet, pagesize=letter)
                 can.setFillColorRGB(0, 0, 1)
-
                 # Add all answer locations to the overlay
                 for location in page_answer_locations:
                     answer_type = check_answer_type(answer)
@@ -105,17 +103,33 @@ def insert_answer_in_pdf(doc_path, answer_locations, answer, user, value, filena
                         y = letter[1] - location['endY'] + 6
                         can.drawString(x, y, '✔')
                     elif location['answerInputType'] == 'multiple-checkbox':
-                        if answer_type != location['answerOutputType'] or not value:
-                            return {'error': 'Answer data type is correct for this answer or missing value'}
-                        if location['value'] == value:
-                            x = location['startX']
-                            y = letter[1] - location['endY'] + 6
-                            can.drawString(x, y, '✔')
+                        if answer_type != location['answerOutputType'] or (not isinstance(values, list) or not values):
+                            return {'error': 'Answer data type is correct for this answer or missing value or incorrect datatype for value'}
+                        position = location['position']
+                        # Filter locations with the same position
+                        positions = [loc for loc in page_answer_locations if loc['position'] == position]
+                        existing_values = [position.get('value') for position in positions]
+                        if len(values) == 1:
+                            if values[0] not in existing_values:
+                                return {'error': 'incorrect value provided for option to mark'}
+                            for pos in positions:
+                                if location['value'] == values[0]:
+                                    x = location['startX']
+                                    y = letter[1] - location['endY'] + 6
+                                    can.drawString(x, y, '✔')
+                        else:
+                            for value in values:
+                                if value not in existing_values:
+                                    return {'error': 'incorrect value provided for option to mark'}
+                                if location['value'] == value:
+                                    x = location['startX']
+                                    y = letter[1] - location['endY'] + 6
+                                    can.drawString(x, y, '✔')
                     elif location['answerInputType'] == 'multiline':
                         if answer_type != location['answerOutputType']:
                             return {'error': 'Answer data type is incorrect for this question'}
                         position = location['position']
-                        text = answer
+                        text = str(answer)
                         # Filter locations with the same position
                         positions = [loc for loc in page_answer_locations if loc['position'] == position]
 
@@ -170,7 +184,6 @@ def insert_answer_in_pdf(doc_path, answer_locations, answer, user, value, filena
                             if can.stringWidth(text[:i], "Helvetica", 12) <= max_width:
                                 can.drawString(x, y, text[:i])
                                 break   
-
                 can.save()
 
                 # Move to the beginning of the StringIO buffer

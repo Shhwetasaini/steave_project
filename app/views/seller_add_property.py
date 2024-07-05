@@ -79,7 +79,8 @@ class PropertyTypeSelectionView(MethodView):
         property_data = {
             'type': property_type,
             'address': property_address,
-            'images':[],
+            'images': [],
+            'panoramic_images': [],
             "name": data.get('name', None),
             "status": data.get('status', None),
             "state": data.get('state', None),
@@ -88,12 +89,21 @@ class PropertyTypeSelectionView(MethodView):
             "longitude": float(data.get('longitude', 0.0) or 0.0),
             "beds": int(data.get('beds', 0) or 0),
             "baths": int(data.get('baths', 0) or 0),
+            "full_bathrooms": int(data.get('full_bathrooms', 0) or 0),
+            "half_bathrooms": int(data.get('half_bathrooms', 0) or 0),
             "kitchen": int(data.get('kitchen', 0) or 0),
             "description": data.get('description', None),
             "price": float(data.get('price', 0.0) or 0.0),
-            "size": data.get('size', None),
-            'panoramic_images':[],
-        }
+            "size": float(data.get('size', 0.0) or 0.0),
+            "built_in": data.get('built_in', None),
+            "attached_garage": int(data.get('attached_garage', 0) or 0),
+            "garage_size": float(data.get('garage_size', 0.0) or 0.0),
+            "appliances": data.get('appliances', []),
+            "kitchen_features": data.get('kitchen_features', []),
+            "features": data.get('features', []),
+            "type_and_styles": data.get('type_and_styles', []),
+            "materials": data.get('materials', [])
+        }       
 
         property_id = create_property(property_data)
         if not property_id:
