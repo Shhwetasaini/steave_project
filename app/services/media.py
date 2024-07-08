@@ -205,7 +205,7 @@ def insert_answer_in_pdf(doc_path, answer_locations, answer, user, values, filen
 
         return {'doc_url': doc_url}
     except Exception as e:
-        return {"error": str(e)}
+        return {"server-error": str(e)}
 
 
 def send_finalized_document(user, file_path):

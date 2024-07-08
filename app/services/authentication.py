@@ -32,19 +32,19 @@ def custom_jwt_required():
         @wraps(fn)
         def wrapper(*args, **kwargs):
             try:
-                verify_jwt_in_request()
+                verify_jwt_in_request()  # Example function to check JWT presence (custom implementation)
             except DecodeError:
-                return jsonify({'error': 'Invalid token format'}), 200
+                return jsonify({'error': 'Invalid token format'}), 401  # Unauthorized
             except InvalidTokenError:
-                return jsonify({'error': 'Token has expired or invalid!'}), 200
+                return jsonify({'error': 'Token has expired or invalid!'}), 401  # Unauthorized
             except Exception as e:
-                if str(e) == 'Missing Authorization Header' or str(e).startswith('Bad Authorization heade'):
-                    return jsonify({'error':"Authorization token is missing!"}), 200
-                if str(e) ==  'Token has been revoked':
-                    return jsonify({'error':"User has been logged out, login again!"}), 200
+                if str(e) == 'Missing Authorization Header' or str(e).startswith('Bad Authorization header'):
+                    return jsonify({'error': 'Authorization token is missing or invalid!'}), 401  # Unauthorized
+                elif str(e) == 'Token has been revoked':
+                    return jsonify({'error': 'User session has expired, please log in again.'}), 401  # Unauthorized
                 
-                logging.error(str(e))
-                return jsonify({'error': "something wrong"}), 200
+                logging.error(f"An error occurred during JWT validation: {str(e)}")
+                return jsonify({'error': 'Internal Server Error'}), 500  # Internal Server Error
             return fn(*args, **kwargs)
         return wrapper
     return decorator

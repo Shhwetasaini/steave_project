@@ -42,10 +42,10 @@ class ReceiveMediaView(MethodView):
             label = request.form.get('label', 'no_label')
 
             if ' ' in label:
-                return jsonify({'error':'Spaces are not allowed in the label!'}), 200
+                return jsonify({'error': 'Spaces are not allowed in the label!'}), 400  # Bad Request
 
             if not file:
-                return jsonify({'error':'file is missing!'}), 200
+                return jsonify({'error': 'File is missing!'}), 400  # Bad Request
 
             user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'users_media', str(user['uuid']))
             os.makedirs(user_media_dir, exist_ok=True)
@@ -60,20 +60,23 @@ class ReceiveMediaView(MethodView):
                 
                 uploaded_media = [{'file': media_url, 'label': label}]
 
-                # Update the media collection
-                current_app.db.media.update_one(
+                # Update the media collection atomically
+                result = current_app.db.media.update_one(
                     {'user_id': user['uuid']},
                     {'$push': {'user_media': {'$each': uploaded_media}}},
                     upsert=True
                 )
+
+                if result.modified_count == 0 and result.upserted_id is None:
+                    return jsonify({'error': 'Failed to update media collection'}), 500  # Internal Server Error
         elif request.is_json:
             # Handle JSON content if needed. This block is placeholder for future expansion.
             pass
         else:
-            return jsonify({"error": "Unsupported Content Type"}), 200
+            return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
 
         log_action(user['uuid'], user['role'], "uploaded-media", uploaded_media)
-        return jsonify({"message": "File successfully received"}), 200
+        return jsonify({"message": "File successfully received"}), 200  # OK
 
 
 class SendMediaView(MethodView):
@@ -91,7 +94,7 @@ class SendMediaView(MethodView):
 
         all_media = current_app.db.media.find_one({'user_id': user['uuid']}, {'_id': 0})
 
-        if not all_media:
+        if not all_media or not all_media.get('user_media'):
             return jsonify([]), 200
         
         log_action(user['uuid'], user['role'], "viewed-media", {})      
@@ -114,29 +117,33 @@ class DeleteMediaView(MethodView):
         # Check if file URL is provided
         file_url = request.form.get('file_url')
         if not file_url:
-            return jsonify({'error': 'File URL is missing!'}), 200
+            return jsonify({'error': 'File URL is missing!'}), 400
 
         # Extract the filename from the URL
         file_name = os.path.basename(file_url)
-     
+
         # Delete the file from the server
         user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'users_media', str(user['uuid']))
         file_path = os.path.join(user_media_dir, file_name)
-       
+
         if os.path.exists(file_path):
             os.remove(file_path)
         else:
-            return jsonify({'error': 'File not found on the server!'}), 200
+            return jsonify({'error': 'File not found on the server!'}), 404
 
         # Update the media collection in the database
-        current_app.db.media.update_one(
+        result = current_app.db.media.update_one(
             {'user_id': user['uuid']},
             {'$pull': {'user_media': {'file': file_url}}},
             upsert=True
         )
+
+        if result.modified_count == 0 and result.upserted_id is None:
+            return jsonify({'error': 'Failed to update media collection'}), 500
+
         log_action(user['uuid'], user['role'], "deleted-media", {'file': file_url})
         return jsonify({'message': 'File deleted successfully'}), 200
-    
+
 
 class DownloadDocView(MethodView):
     decorators = [custom_jwt_required()]
@@ -156,17 +163,17 @@ class DownloadDocView(MethodView):
         elif request.is_json:
             data = request.json
         else:
-            return jsonify({"error": "Unsupported Content Type"}), 200
+            return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
         
         name = data.get('filename')
 
         if not name:
-            return jsonify({"error": "name is missing!"}), 200
+            return jsonify({"error": "name is missing!"}), 400  # Bad Request
 
         document = current_app.db.documents.find_one({'name':name})
 
         if not document:
-            return jsonify({'error':"document does not exist!"}),  200
+            return jsonify({'error':"document does not exist!"}), 404  # Not Found
 
         document_data = {
             'name': document['name'],
@@ -194,14 +201,13 @@ class DownloadDocView(MethodView):
             log_action(user['uuid'], user['role'], "downloaded-document", document_data)
             return jsonify({"message": "Document already exists for the user. Updated."}), 200
         else:
-            
             current_app.db.users_downloaded_docs.update_one(
                 {'uuid': user['uuid']}, 
                 {'$push': { 'downloaded_documents':document_data}},
                upsert=True
             )
             log_action(user['uuid'], user['role'], "downloaded-document", document_data)
-            return jsonify({"message": "Document successfully added to user's documents"}), 200
+            return jsonify({"message": "Document successfully added to user's documents"}), 201  # Created
 
    
 class UploadDocView(MethodView):
@@ -219,7 +225,7 @@ class UploadDocView(MethodView):
 
         file = request.files.get('file')
         if not file:
-            return jsonify({'error': 'File is missing!'}), 400
+            return jsonify({'error': 'File is missing!'}), 400  # Bad Request
 
         if file and werkzeug.utils.secure_filename(file.filename):
             org_filename = werkzeug.utils.secure_filename(file.filename)
@@ -246,9 +252,9 @@ class UploadDocView(MethodView):
             )
          
             log_action(user['uuid'], user['uuid'], "uploaded-document", document_data)
-            return jsonify({"message": "File successfully uploaded!", "uploaded-document": document_data}), 200
+            return jsonify({"message": "File successfully uploaded!", "uploaded-document": document_data}), 201  # Created
         else:
-            return jsonify({"error": "File is missing or invalid filename."}), 400
+            return jsonify({"error": "File is missing or invalid filename."}), 400  # Bad Request
 
 
 class AllDocsView(MethodView):
@@ -329,7 +335,7 @@ class UserDownloadedDocsView(MethodView):
             log_action(user['uuid'], user['role'], "viewed-downloaded-docs", {})
             return jsonify(user_docs['downloaded_documents']), 200
         else:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404  #Not found
 
 
 class UserUploadedDocsView(MethodView):
@@ -350,7 +356,7 @@ class UserUploadedDocsView(MethodView):
             log_action(user['uuid'], user['role'], "viewed-uploaded-docs", {})
             return jsonify(user_docs['uploaded_documents']), 200
         else:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404  #Not found
 
 
 class UserDocsDateRangeView(MethodView):
@@ -374,9 +380,9 @@ class UserDocsDateRangeView(MethodView):
             doc_type = request.args.get('doc_type')
 
             if not start_date or not end_date or not doc_type:
-                return jsonify({"error": "Please provide start_date, end_date and doc_type in params"})
+                return jsonify({"error": "Please provide start_date, end_date and doc_type in params"}), 400
             if doc_type not in ['user-docs', 'all-docs']:
-                return jsonify({"error": "Invalid value provided in params for doc_type"})
+                return jsonify({"error": "Invalid value provided in params for doc_type"}), 400
 
             start_date = datetime.fromisoformat(start_date)
             end_date = datetime.fromisoformat(end_date)
@@ -441,7 +447,7 @@ class UserDocsDateRangeView(MethodView):
                 else:
                     return jsonify([]) 
         except Exception as e:
-            return jsonify({"error": str(e)})
+            return jsonify({"error": str(e)}), 500
 
 
 class DocumentFillRequestView(MethodView):
@@ -458,11 +464,11 @@ class DocumentFillRequestView(MethodView):
                 user = current_app.db.users.find_one({'uuid': current_user})
 
             if not user:
-                return jsonify({'error': 'User not found'})
+                return jsonify({'error': 'User not found'}), 404
             
             document = current_app.db.documents.find_one({'_id': ObjectId(document_id)})
             if not document:
-                return jsonify({'error': 'document not found'})
+                return jsonify({'error': 'document not found'}), 404
             
             # Get URL of original PDF
             relative_path_encoded = document['url'].split('/media/')[-1]
@@ -478,7 +484,7 @@ class DocumentFillRequestView(MethodView):
 
             user_document = create_user_document(original_file_path, new_doc_path, user_media_dir, filename, user)
             if user_document.get('error'):
-                return jsonify(user_document)
+                return jsonify(user_document), 500
             else:
                 doc_url = user_document.get('doc_url')
 
@@ -508,7 +514,7 @@ class DocumentFillRequestView(MethodView):
             log_action(user['uuid'], user['role'], "document-fill-request/view", document_data)
             return jsonify(user_document), 200
         except Exception as e:
-            return jsonify({"error": str(e)})
+            return jsonify({"error": str(e)}), 500
 
 
 class DocAnswerInsertionView(MethodView):
@@ -525,11 +531,11 @@ class DocAnswerInsertionView(MethodView):
                 user = current_app.db.users.find_one({'uuid': current_user})
 
             if not user:
-                return jsonify({'error': 'User not found'})
+                return jsonify({'error': 'User not found'}), 404
             
             document = current_app.db.documents.find_one({'_id': ObjectId(document_id)})
             if not document:
-                return jsonify({'error': 'document not found'})
+                return jsonify({'error': 'document not found'}), 404
             
             doc_questions = list(current_app.db.doc_questions_answers.find({'document_id': document_id}))
             questions = []
@@ -575,7 +581,7 @@ class DocAnswerInsertionView(MethodView):
             log_action(user['uuid'], user['role'], "viewed-document-questions", {'document_id':document_id})
             return jsonify(questions), 200
         except Exception as e:
-            return jsonify({"error": str(e)})
+            return jsonify({"error": str(e)}), 500
 
     def post(self, document_id):
         try:
@@ -588,12 +594,12 @@ class DocAnswerInsertionView(MethodView):
                 user = current_app.db.users.find_one({'uuid': current_user})
 
             if not user:
-                return jsonify({'error': 'User not found'})
+                return jsonify({'error': 'User not found'}), 404
 
             # Check if all required parameters are present in the request payload
             required_params = ['question_id', 'answer', 'doc_url']
             if not all(param in request.json for param in required_params):
-                return jsonify({'error': 'Missing required parameters'})
+                return jsonify({'error': 'Missing required parameters'}), 400
 
             question_id = request.json['question_id']
             answer = request.json['answer']
@@ -603,7 +609,7 @@ class DocAnswerInsertionView(MethodView):
             # Retrieve original PDF from MongoDB
             document = current_app.db.documents.find_one({'_id': ObjectId(document_id)})
             if not document:
-                return jsonify({'error': 'Document not found'})
+                return jsonify({'error': 'Document not found'}), 404
 
             # Document data to be inserted or updated
             user_name = user.get('first_name') + " " + user['last_name']
@@ -624,7 +630,7 @@ class DocAnswerInsertionView(MethodView):
                 {'uploaded_documents.$': 1, '_id':0}
             )
             if not existing_document:
-                return jsonify({'error': 'Please request for sign and fill of the document'})
+                return jsonify({'error': 'Please request for sign and fill of the document'}), 404
             
             user_document = existing_document.get('uploaded_documents')[0]
 
@@ -635,7 +641,7 @@ class DocAnswerInsertionView(MethodView):
             )
 
             if not question:
-                return jsonify({'error': 'Question does not exist for this document'})
+                return jsonify({'error': 'Question does not exist for this document'}), 404
             answer_locations = question.get('answer_locations')
 
             # Get URL of original PDF
@@ -648,7 +654,9 @@ class DocAnswerInsertionView(MethodView):
             )
 
             if inserted_answer.get('error'):
-                return jsonify(inserted_answer)
+                return jsonify(inserted_answer), 400
+            elif inserted_answer.get('server-error'):
+                return jsonify(inserted_answer), 500
             else:
                 doc_url = inserted_answer.get('doc_url')
         
@@ -693,7 +701,7 @@ class DocAnswerInsertionView(MethodView):
                     log_action(user['uuid'], user['role'], "document-signed-and-email-sent", log_data)
                     return jsonify({'message':"Document signed successfully and send to the user email"})
                 else:
-                    return jsonify({'error': send_doc.get('error')})
+                    return jsonify({'error': send_doc.get('error')}), 500
 
             log_data =  {
                 'original_document_id': document_id,
@@ -713,7 +721,7 @@ class DocAnswerInsertionView(MethodView):
             # Return the URL of the saved PDF
             return jsonify({'doc_url': doc_url})
         except Exception as e:
-            return jsonify({'error': str(e)})
+            return jsonify({'error': str(e)}), 500
 
 
 class DocumentPrefillAnswerView(MethodView):
@@ -730,12 +738,12 @@ class DocumentPrefillAnswerView(MethodView):
                 user = current_app.db.users.find_one({'uuid': current_user})
 
             if not user:
-                return jsonify({'error': 'User not found'})
+                return jsonify({'error': 'User not found'}), 404
             
             # Check if all required parameters are present in the request payload
             required_params = ['street_number', 'street_name', 'city', 'state']
             if not all(param in request.json for param in required_params):
-                return jsonify({'error': 'Missing required parameters'})
+                return jsonify({'error': 'Missing required parameters'}), 400
             payload = {
                 'street_number': request.json['street_number'],
                 'street_name': request.json['street_name'],
@@ -749,7 +757,7 @@ class DocumentPrefillAnswerView(MethodView):
                 prefill_data = response.json()
                 return jsonify(prefill_data)
             else:
-                return jsonify({'error': "Something went wrong, unable to get prefill data"})
+                return jsonify({'error': "Something went wrong, unable to get prefill data"}), 500
         
         except Exception as e:
-            return jsonify({'error': str(e)})
+            return jsonify({'error': str(e)}), 500
