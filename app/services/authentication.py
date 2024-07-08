@@ -1,6 +1,8 @@
 import os
 import random
+import json
 import logging
+from bson import ObjectId
 
 from flask import request, current_app
 from functools import wraps
@@ -99,3 +101,40 @@ def log_action(user_id, user_role, action, payload=None):
         )
     else:
         current_app.db.audit.insert_one({"user_id": user_id, "user_role": user_role, "logs": [log]}) 
+
+
+def insert_liked_properties(user_uuid, liked_properties):
+    try:
+        values = json.loads(liked_properties)
+    except json.JSONDecodeError as e:
+        return {'error':f"JSON decoding error: {e}"}
+
+    if type(values) != list:
+        return {'error':'only array of values are accepted for liked_properties'} 
+    if not all(isinstance(value, str) for value in values):
+        return {'error': "All array elements must be strings"}
+    
+
+    # Convert property_ids to ObjectId
+    try:
+        object_ids = [ObjectId(value) for value in values]
+    except Exception as e:
+        return {'error': "Invalid ObjectId in liked_properties: " + str(e)}
+    
+    # Check if all property_ids exist in the properties collection
+    properties_count = current_app.db.properties.count_documents({"_id": {"$in": object_ids}})
+    if properties_count != len(values):
+        return {'error': "Some properties does not exists in provided payload"}
+    
+    # Check if all property_ids exist in the property_seller_transaction_collection
+    transactions_count = current_app.db.property_seller_transaction.count_documents({"property_id": {"$in": values}})
+    print(transactions_count)
+    if transactions_count != len(values):
+        return {'error': "Some Invalid properties exists in provided payload"}   
+
+    current_app.db.users.find_one_and_update(
+        {"uuid": user_uuid},
+        {"$addToSet": {"liked_properties": {"$each": values}}}
+    )  
+
+    return {'success': True}

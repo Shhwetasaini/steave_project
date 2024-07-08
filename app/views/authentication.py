@@ -12,8 +12,12 @@ from flask_jwt_extended import create_access_token, get_jwt_identity, get_jwt
 from werkzeug.utils import secure_filename
 
 from app.services.admin import log_request
-from app.services.authentication import custom_jwt_required, send_otp_via_email, generate_otp ,log_action
-
+from app.services.authentication import (
+    custom_jwt_required, 
+    send_otp_via_email, 
+    generate_otp ,log_action,
+    insert_liked_properties
+)
 
 
 class RegisterUserView(MethodView):
@@ -78,8 +82,9 @@ class RegisterUserView(MethodView):
             'linkedin': linkedin,
             'profile_pic': None,
             'password': hashlib.sha256(password.encode("utf-8")).hexdigest(),
-            'is_verified': False
-        }
+            'is_verified': False,
+            'liked_properties': []
+        }       
         
         query = {"$or": [{"uuid": uuid_val}, {"email": email}]}
         existing_user = current_app.db.users.find_one(query)
@@ -283,6 +288,7 @@ class UpdateUsersView(MethodView):
         last_name = data.get('last_name', None)
         phone = data.get('phone', None)
         password = data.get('password', None)
+        liked_properties = data.get('liked_properties')
 
         if first_name is not None and first_name.strip() != '':
             update_doc['first_name'] = first_name
@@ -305,7 +311,12 @@ class UpdateUsersView(MethodView):
         
         if password is not None and password.strip() != '':
             update_doc['password'] = hashlib.sha256(password.encode("utf-8")).hexdigest()
-
+        
+        if liked_properties:
+            result = insert_liked_properties(user['uuid'], liked_properties)
+            if result.get('error'):
+                return result        
+        
         # If the update document is empty, return an error
         if not update_doc:
             return jsonify({"error": "No fields to update!"}), 200
