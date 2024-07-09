@@ -37,44 +37,41 @@ class ReceiveMediaView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         # Handle both JSON and multipart/form-data for receiving files
-        if request.content_type.startswith('multipart/form-data'):
-            file = request.files.get('file')
-            label = request.form.get('label', 'no_label')
-
-            if ' ' in label:
-                return jsonify({'error': 'Spaces are not allowed in the label!'}), 400  # Bad Request
-
-            if not file:
-                return jsonify({'error': 'File is missing!'}), 400  # Bad Request
-
-            user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'users_media', str(user['uuid']))
-            os.makedirs(user_media_dir, exist_ok=True)
-
-            if file and werkzeug.utils.secure_filename(file.filename):
-                org_filename = werkzeug.utils.secure_filename(file.filename)
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                filename = f"{timestamp}_{label}_{org_filename}"
-                user_media_path = os.path.join(user_media_dir, filename)
-                file.save(user_media_path)
-                media_url = url_for('serve_media', filename=os.path.join('users_media', str(user['uuid']), filename))
-                
-                uploaded_media = [{'file': media_url, 'label': label}]
-
-                # Update the media collection atomically
-                result = current_app.db.media.update_one(
-                    {'user_id': user['uuid']},
-                    {'$push': {'user_media': {'$each': uploaded_media}}},
-                    upsert=True
-                )
-
-                if result.modified_count == 0 and result.upserted_id is None:
-                    return jsonify({'error': 'Failed to update media collection'}), 500  # Internal Server Error
-        elif request.is_json:
-            # Handle JSON content if needed. This block is placeholder for future expansion.
-            pass
-        else:
+        if not request.content_type.startswith('multipart/form-data'):
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
 
+        file = request.files.get('file')
+        label = request.form.get('label', 'no_label')
+
+        if ' ' in label:
+           return jsonify({'error': 'Spaces are not allowed in the label!'}), 400  # Bad Request
+
+        if not file:
+            return jsonify({'error': 'File is missing!'}), 400  # Bad Request
+
+        user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'users_media', str(user['uuid']))
+        os.makedirs(user_media_dir, exist_ok=True)
+
+        if file and werkzeug.utils.secure_filename(file.filename):
+            org_filename = werkzeug.utils.secure_filename(file.filename)
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            filename = f"{timestamp}_{label}_{org_filename}"
+            user_media_path = os.path.join(user_media_dir, filename)
+            file.save(user_media_path)
+            media_url = url_for('serve_media', filename=os.path.join('users_media', str(user['uuid']), filename))
+                
+            uploaded_media = [{'file': media_url, 'label': label}]
+
+            # Update the media collection atomically
+            result = current_app.db.media.update_one(
+                {'user_id': user['uuid']},
+                {'$push': {'user_media': {'$each': uploaded_media}}},
+                upsert=True
+            )
+
+            if result.modified_count == 0 and result.upserted_id is None:
+                return jsonify({'error': 'Failed to update media collection'}), 500  # Internal Server Error
+        
         log_action(user['uuid'], user['role'], "uploaded-media", uploaded_media)
         return jsonify({"message": "File successfully received"}), 200  # OK
 
@@ -158,13 +155,9 @@ class DownloadDocView(MethodView):
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
 
-        if request.content_type.startswith('multipart/form-data'):
-            data = request.form
-        elif request.is_json:
-            data = request.json
-        else:
-            return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
-        
+        if not request.content_type.startswith('multipart/form-data'):
+            return jsonify({"error": "Unsupported Content Type"}), 415
+        data = request.form
         name = data.get('filename')
 
         if not name:
@@ -699,7 +692,7 @@ class DocAnswerInsertionView(MethodView):
                         'timestamp': datetime.now()
                     }
                     log_action(user['uuid'], user['role'], "document-signed-and-email-sent", log_data)
-                    return jsonify({'message':"Document signed successfully and send to the user email"})
+                    return jsonify({'message':"Document signed successfully and send to the user email"}), 200
                 else:
                     return jsonify({'error': send_doc.get('error')}), 500
 

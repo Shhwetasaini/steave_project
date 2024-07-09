@@ -25,13 +25,12 @@ class RegisterUserView(MethodView):
         log_request()
 
         # Determine content type and parse data accordingly
-        if request.content_type.startswith('multipart/form-data'):
-            data = request.form
-        elif request.is_json:
-            data = request.json
-        else:
+        
+        if not request.is_json:
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
-
+        
+        data = request.json
+     
         uuid_val = str(uuid.uuid4())
         first_name = data.get('first_name', None)
         last_name = data.get('last_name', None)
@@ -114,12 +113,9 @@ class LoginUserView(MethodView):
         log_request()
 
         # Determine content type and parse data accordingly
-        if request.content_type.startswith('multipart/form-data'):
-            data = request.form
-        elif request.is_json:
-            data = request.json
-        else:
+        if not request.is_json:
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
+        data = request.json
 
         email = data.get('email')
         password = data.get('password')
@@ -152,12 +148,10 @@ class UserUuidLoginView(MethodView):
         log_request()
 
         # Determine content type and parse data accordingly
-        if request.content_type.startswith('multipart/form-data'):
-            data = request.form
-        elif request.is_json:
-            data = request.json
-        else:
+        if not request.is_json:
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
+        
+        data = request.json
 
         uuid = data.get('user_id')
 
@@ -204,13 +198,9 @@ class UserUUIDView(MethodView):
     def post(self):
         log_request()
 
-        if request.content_type.startswith('multipart/form-data'):
-            data = request.form
-        elif request.is_json:
-            data = request.json
-        else:
+        if not request.is_json:
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
-
+        data = request.json
         email = data.get('email')
         if not email:
             return jsonify({"error": "Email is missing!"}), 400  # Bad Request
@@ -266,35 +256,32 @@ class UpdateUsersView(MethodView):
         update_doc = {}
 
         # Determine content type and parse data accordingly
-        if request.content_type.startswith('multipart/form-data'):
-            data = request.form
-            profile_pic = request.files.get('profile_pic')
-            if profile_pic and secure_filename(profile_pic.filename):
-                filename = secure_filename(profile_pic.filename)
-                user_profile_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'users_profile', str(user['uuid']))
-                os.makedirs(user_profile_dir, exist_ok=True)
-                
-                # Delete old profile picture if it exists
-                if user['profile_pic'] is not None:
-                    old_profile_pic_path = os.path.join(user_profile_dir, user['profile_pic'].split('/')[-1])
-                    if os.path.exists(old_profile_pic_path):
-                        os.remove(old_profile_pic_path)
-        
-                profile_pic_path = os.path.join(user_profile_dir, filename)
-                profile_pic.save(profile_pic_path)
-                media_url = url_for('serve_media', filename=os.path.join('users_profile', str(user['uuid']), filename))
-                update_doc['profile_pic'] = media_url
-        elif request.is_json:
-            data = request.json
-        else:
+        if not request.content_type.startswith('multipart/form-data'):
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
-
+            
+        data = request.form
+        profile_pic = request.files.get('profile_pic')
+        if profile_pic and secure_filename(profile_pic.filename):
+            filename = secure_filename(profile_pic.filename)
+            user_profile_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'users_profile', str(user['uuid']))
+            os.makedirs(user_profile_dir, exist_ok=True)
+            
+            # Delete old profile picture if it exists
+            if user['profile_pic'] is not None:
+                old_profile_pic_path = os.path.join(user_profile_dir, user['profile_pic'].split('/')[-1])
+                if os.path.exists(old_profile_pic_path):
+                    os.remove(old_profile_pic_path)
+    
+            profile_pic_path = os.path.join(user_profile_dir, filename)
+            profile_pic.save(profile_pic_path)
+            media_url = url_for('serve_media', filename=os.path.join('users_profile', str(user['uuid']), filename))
+            update_doc['profile_pic'] = media_url
+    
         first_name = data.get('first_name')
         last_name = data.get('last_name')
         phone = data.get('phone')
         password = data.get('password')
         liked_properties = data.get('liked_properties')
-
         if first_name and first_name.strip() != '':
             update_doc['first_name'] = first_name.strip()
         if last_name and last_name.strip() != '':
@@ -309,44 +296,36 @@ class UpdateUsersView(MethodView):
                 return jsonify({"error": "Invalid phone number format."}), 400  # Bad Request
             except ValueError:
                 return jsonify({"error": "Invalid phone number."}), 400  # Bad Request
-
             formatted_phone = phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
             update_doc['phone'] = formatted_phone
-        
         if password and password.strip() != '':
             update_doc['password'] = hashlib.sha256(password.encode("utf-8")).hexdigest()
-        
         if liked_properties:
             result = insert_liked_properties(user['uuid'], liked_properties)
             if result.get('error'):
                 return jsonify(result), 400  # Bad Request
-        
         # If the update document is empty, return an error
         if not update_doc:
             return jsonify({"error": "No fields to update!"}), 400  # Bad Request
-
         updated_user = current_app.db.users.find_one_and_update(
             {"uuid": user['uuid']},
             {"$set": update_doc},
             return_document=True 
         )
-
         if updated_user:
             log_action(user['uuid'], user['role'], "updated-profile", update_doc)
             return jsonify({'message': "User updated successfully!"}), 200  # OK
         else:
             return jsonify({'error': 'User not found or no fields to update!'}), 404  # Not Found
+    
 
 
 class ForgetPasswdView(MethodView):
     def post(self):
-        if request.content_type.startswith('multipart/form-data'):
-            data = request.form
-        elif request.is_json:
-            data = request.json
-        else:
+        if not request.is_json:
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
-        
+        data = request.json
+
         email = data.get('email') or request.form.get('email')
         if not email:
             return jsonify({"error": "Email is missing!"}), 400  # Bad Request
@@ -372,13 +351,10 @@ class ForgetPasswdView(MethodView):
 
 class ResetPasswdView(MethodView):
     def post(self):
-        if request.content_type.startswith('multipart/form-data'):
-            data = request.form
-        elif request.is_json:
-            data = request.json
-        else:
+        if not request.is_json:
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
-        
+        data = request.json
+
         email = data.get('email')
         otp_received = data.get('otp')
         new_password = data.get('new_password')
@@ -410,13 +386,9 @@ class ResetPasswdView(MethodView):
 
 class VerifyOtpView(MethodView):
     def post(self):
-        if request.content_type.startswith('multipart/form-data'):
-            data = request.form
-        elif request.is_json:
-            data = request.json
-        else:
+        if not request.is_json:
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
-        
+        data = request.json
         email = data.get('email')
         otp_received = data.get('otp')
 

@@ -48,33 +48,33 @@ class PropertyTypeSelectionView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'})
+            return jsonify({'error': 'User not found'}), 404
         
         user_role = user.get('role')
         if user_role == 'realtor':
-            return jsonify({'error': 'Unauthorized access'}), 200
+            return jsonify({'error': 'Unauthorized access'}), 401
         
         data = request.json
         property_address = data.get('seller_address',None)
         property_type = data.get('property_type',None)
 
         if not property_address or not property_type:
-            return jsonify({"error":"seller_address and property_type field is required"})
+            return jsonify({"error":"seller_address and property_type field is required"}), 400
 
         if property_address.isdigit():
-          return jsonify({'error': 'seller_address and property_type field is required'})
+          return jsonify({'error': 'seller_address and property_type field is required'}), 400
         
         # Check if the address contains "US" or "United States" or "États-Unis"
         if not re.search(r'\b(US|United States|USA|États-Unis|U\.S\.?)\b', property_address, flags=re.IGNORECASE):
-            return jsonify({'error': 'Please enter a valid address in the United States.'})
+            return jsonify({'error': 'Please enter a valid address in the United States.'}), 400
         
         # Check if seller_property_address is present in e_sign_data and contains mn, minnesota, fl, or florida
         if not any(keyword in  property_address.lower() for keyword in ['mn', 'minnesota', 'fl', 'florida']):
-            return jsonify({'error': "The address must be located in Minnesota (MN) or Florida (FL)."})
+            return jsonify({'error': "The address must be located in Minnesota (MN) or Florida (FL)."}), 400
         
         valid_address = validate_address(property_address)
         if not valid_address:
-            return jsonify({'error': "Invalid Address. missing country, state or postal_code"})
+            return jsonify({'error': "Invalid Address. missing country, state or postal_code"}), 400
         
         property_data = {
             'type': property_type,
@@ -107,7 +107,7 @@ class PropertyTypeSelectionView(MethodView):
 
         property_id = create_property(property_data)
         if not property_id:
-            return jsonify({'error': 'Failed to create property.'})
+            return jsonify({'error': 'Failed to create property.'}), 400
         logger.info('Property created successfully')
         property_data['property_id'] = property_id
         
@@ -130,11 +130,11 @@ class PropertyTypeSelectionView(MethodView):
             transaction_id = str(transaction_result.inserted_id)
             logger.info('Transaction created successfully')
         else:
-            return jsonify({'error': 'Failed to create transaction.'})
+            return jsonify({'error': 'Failed to create transaction.'}), 400
         data['property_id'] = property_id
         data['transaction_id'] = transaction_id
         log_action(user['uuid'], user['role'], "selected-property_address and property_type", data)
-        return jsonify({'message':'data saved successfully.', 'transaction_id': transaction_id})
+        return jsonify({'message':'data saved successfully.', 'transaction_id': transaction_id}), 200
 
 
 class PropertyUploadImageView(MethodView):
@@ -150,7 +150,7 @@ class PropertyUploadImageView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'})
+            return jsonify({'error': 'User not found'}), 404
 
         data = request.form
         transaction_id = data.get('transaction_id')
@@ -159,14 +159,14 @@ class PropertyUploadImageView(MethodView):
         
 
         if not transaction_id or not labels:
-            return jsonify({'error':'Missing transacion_id or label'})
+            return jsonify({'error':'Missing transacion_id or label'}), 400
         
         if len(labels) != len(images):
-            return jsonify({'error': "label and images should be same length"})
+            return jsonify({'error': "label and images should be same length"}), 400
         
         transaction_data = current_app.db.transaction.find_one({"_id": ObjectId(transaction_id)})
         if not transaction_data:
-            return jsonify({'error':'Invalid Transaction'})
+            return jsonify({'error':'Invalid Transaction'}), 400
         
         #Check for incorrect or used transaction
         existing_transaction = current_app.db.property_seller_transaction.find_one(
@@ -176,7 +176,7 @@ class PropertyUploadImageView(MethodView):
             }
         )
         if existing_transaction:
-            return jsonify({'error':'Invalid transaction, transaction already exist for this property'})
+            return jsonify({'error':'Invalid transaction, transaction already exist for this property'}), 400
         
         uploaded_images = 0
         image_urls = []
@@ -219,7 +219,7 @@ class PropertyUploadImageView(MethodView):
                 
             except Exception as e:
                 logger.error(f"Error Uploading property images: {str(e)}")
-                return jsonify({'error':'Failed to upload image'})
+                return jsonify({'error':'Failed to upload image'}), 400
             
         payload = {
             "transaction_id":transaction_id, 
@@ -227,7 +227,7 @@ class PropertyUploadImageView(MethodView):
             "images": image_urls
         }
         log_action(user['uuid'],user['role'], "added-property-images", payload)
-        return jsonify({'message':'data saved successfully.', 'uploaded_images':uploaded_images})
+        return jsonify({'message':'data saved successfully.', 'uploaded_images':uploaded_images}), 200
 
 
 class SavePdfView(MethodView):
@@ -242,24 +242,24 @@ class SavePdfView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'})
+            return jsonify({'error': 'User not found'}), 404
 
         data = request.json
         transaction_id = data.get('transaction_id')
         signature_data = data.get('signature_data')
         logger.info(signature_data)
         if not transaction_id or not signature_data:
-            return jsonify({'error':'Missing transacion_id or signature_data'})
+            return jsonify({'error':'Missing transacion_id or signature_data'}), 400
         
         transaction = current_app.db.transaction.find_one({'_id': ObjectId(transaction_id)})
         if not transaction:
-            return jsonify({'error':'Invalid Transaction'})
+            return jsonify({'error':'Invalid Transaction'}), 400
         
          
         #Check for incorrect or used transaction
         existing_transaction = current_app.db.property_seller_transaction.find_one({"transaction_id": transaction_id, 'property_id': transaction['property_data']['property_id']})
         if existing_transaction:
-            return jsonify({'error':'Invalid transaction, transaction already exist for this property'})
+            return jsonify({'error':'Invalid transaction, transaction already exist for this property'}), 400
         
         template_pdf = None
         signature_pdf = None
@@ -275,7 +275,7 @@ class SavePdfView(MethodView):
             elif 'fl' in property_address or 'florida' in property_address:
                 template_path = '/home/local/API/florida.pdf'
             else:
-                return jsonify({'error': 'Invalid property_address.'})
+                return jsonify({'error': 'Invalid property_address.'}), 400
             
             signer_name = f"{transaction.get('user_info')['first_name']}_{transaction.get('user_info')['last_name']}"
             folder_path = os.path.join(current_app.root_path, 'media', 'Home', 'sign')
@@ -295,7 +295,7 @@ class SavePdfView(MethodView):
                 rect = fitz.Rect(430, 0, 625, 850)
                 fifth_page.insert_image(rect, pixmap=signature_pdf[0].get_pixmap(), keep_proportion=True)
             else:
-                return jsonify({"error":"PDF does not have enough pages to insert the signature."})
+                return jsonify({"error":"PDF does not have enough pages to insert the signature."}), 400
             
             unique_filename = generate_unique_name(folder_path, f"{signer_name}_signed_document.pdf")
             file_path = os.path.join(folder_path, unique_filename)
@@ -326,10 +326,10 @@ class SavePdfView(MethodView):
             document_data['property_id'] =  transaction['property_data']['property_id']
             document_data.pop('_id')
             log_action(user['uuid'], user['role'], "signed-property_contract", document_data) 
-            return jsonify({'message':'data saved successfully.'})
+            return jsonify({'message':'data saved successfully.'}), 200
         except Exception as e:
             print("Error during PDF generation:", str(e))
-            return jsonify({'error': str(e)})
+            return jsonify({'error': str(e)}), 400
         finally:
             if template_pdf:
                 template_pdf.close()
@@ -351,7 +351,7 @@ class CheckoutView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'})
+            return jsonify({'error': 'User not found'}), 404
 
         data = request.json
         transaction_id = data.get('transaction_id')
@@ -360,19 +360,19 @@ class CheckoutView(MethodView):
         payment_amount = int(data.get('payment_amount', 997)  or 0)
 
         if payment_amount != 497 and payment_amount != 997:
-            return jsonify({'error':'Invalid payment amount'})
+            return jsonify({'error':'Invalid payment amount'}), 400
         
         if not transaction_id or not token:
-            return jsonify({'error':'Missing transacion_id or card token'})
+            return jsonify({'error':'Missing transacion_id or card token'}), 400
         
         transaction = current_app.db.transaction.find_one({'_id': ObjectId(transaction_id)})
         if not transaction:
-            return jsonify({'error':'Invalid Transaction'})
+            return jsonify({'error':'Invalid Transaction'}), 400
         
         #Check for incorrect or used transaction
         existing_transaction = current_app.db.property_seller_transaction.find_one({"transaction_id": transaction_id, 'property_id': transaction['property_data']['property_id']})
         if existing_transaction:
-            return jsonify({'error':'Invalid transaction, transaction already exist for this property'})
+            return jsonify({'error':'Invalid transaction, transaction already exist for this property'}), 400
         
         coupon = current_app.db.coupon.find_one({'code': code})
         if coupon:
@@ -387,7 +387,7 @@ class CheckoutView(MethodView):
 
         try:
             if amount < 100 or amount > 1000000:
-                return jsonify({'error':'Invalid amount'})
+                return jsonify({'error':'Invalid amount'}), 400
             
             logger.info("Amount validated.")
 
@@ -399,7 +399,7 @@ class CheckoutView(MethodView):
             )
         
             if not (charge.paid and charge.status == 'succeeded'):
-                return jsonify({'error': 'Payment failed.'})
+                return jsonify({'error': 'Payment failed.'}), 400
             
             logger.info("Charge created successfully.")
             current_app.db.transaction.update_one({'_id':ObjectId(transaction_id)}, {'$set': {'amount': amount}})
@@ -428,19 +428,19 @@ class CheckoutView(MethodView):
                 } 
                 log_action(user['uuid'],user['role'], "purchassed-property", payload)
                 logger.info("Email sent successfully.")
-                return jsonify({'message': 'Property purchase succesfull.'})  # Specify the success URL
+                return jsonify({'message': 'Property purchase succesfull.'}), 200  # Specify the success URL
             else:
                 logger.error("Failed to send email.")
-                return jsonify({'error': 'Failed to send email.'})
+                return jsonify({'error': 'Failed to send email.'}), 400
 
         except stripe.error.CardError as e:
             logger.error(f"Stripe card error: {e}")
-            return jsonify({'error': str(e)})
+            return jsonify({'error': str(e)}), 400
 
         except ValueError as ve:
-            logger.error(f"Invalid amount error: {ve}")
+            logger.error(f"Invalid amount error: {ve}"), 400
             return jsonify({'error': str(ve)})
         
         except Exception as e:
             logger.error(f"Failed to checkout: {e}")
-            return jsonify({'error': str(e)})
+            return jsonify({'error': str(e)}), 400

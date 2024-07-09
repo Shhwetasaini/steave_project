@@ -38,7 +38,7 @@ class SaveUserMessageView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
 
         if not message and not file:
-            return jsonify({'message': "Missing message content"})
+            return jsonify({'message': "Missing message content"}), 400
         
         chat_message = {
             'user_id': user['uuid'],
@@ -83,7 +83,7 @@ class SaveUserMessageView(MethodView):
                 )
             else:
                 # Handle the case where the file has an invalid extension
-                return jsonify({"error": "Invalid file type. Allowed files are: {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}"}), 200
+                return jsonify({"error": "Invalid file type. Allowed files are: {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}"}), 415
         
 
        
@@ -138,7 +138,7 @@ class CheckResponseView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
       
         if not user:
-            return jsonify({"error":"user not found "})
+            return jsonify({"error":"user not found "}), 404
         
         # Retrieve messages from MongoDB for the given user_id
         current_app.db.messages.update_one(
@@ -153,7 +153,7 @@ class CheckResponseView(MethodView):
             log_action(user['uuid'], user['role'], "viewed-customer_service-chat", {})
             return jsonify(response), 200
         else:
-            return jsonify({"response": "No response found!"}), 200
+            return jsonify({"response": "No response found!"}), 404
 
 
 class BuyerSellersChatView(MethodView):
@@ -170,11 +170,11 @@ class BuyerSellersChatView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
         
         user_role = user.get('role')
         if user_role == 'realtor':
-            return jsonify({'error': 'Unauthorized access'}), 200
+            return jsonify({'error': 'Unauthorized access'}), 403
 
         seller = current_app.db.property_seller_transaction.find_one({'seller_id': user_id, 'property_id': property_id})
         
@@ -193,7 +193,7 @@ class BuyerSellersChatView(MethodView):
         })
 
         if not messages:
-            return jsonify({'error': 'No messages found'}), 200
+            return jsonify({'error': 'No messages found'}), 404
         
         payload ={"property_id":property_id, "receiver_id":user_id}
         
@@ -213,11 +213,11 @@ class BuyerSellersChatView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
         
         user_role = user.get('role')
         if user_role == 'realtor':
-            return jsonify({'error': 'Unauthorized access'}), 200
+            return jsonify({'error': 'Unauthorized access'}), 403
 
         # Extract receiver_id and message_content from request data
         data = request.form
@@ -227,16 +227,16 @@ class BuyerSellersChatView(MethodView):
         file = request.files.get('media_file')
 
         if not message and not file :
-            return jsonify({"error": "Missing message content"}), 200
+            return jsonify({"error": "Missing message content"}), 400
 
         if not receiver_id or not property_id:
-            return jsonify({"error": "Missing receiver_id or property_id"}), 200
+            return jsonify({"error": "Missing receiver_id or property_id"}), 400
         
         receiver = current_app.db.users.find_one({'uuid': receiver_id})
         user_property = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
 
         if not receiver or not user_property:
-            return jsonify({"error": "Receiver or property not found'"}), 200
+            return jsonify({"error": "Receiver or property not found'"}), 404
         
         # Construct chat message document
         chat_message = {
@@ -297,10 +297,10 @@ class BuyerSellersChatView(MethodView):
                 )
             else:
                 # Handle the case where the file has an invalid extension
-                return jsonify({"error": "Invalid file type. Allowed files are: {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}"}), 200
+                return jsonify({"error": "Invalid file type. Allowed files are: {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}"}), 415
 
         if buyer_id == seller_id:
-            return jsonify({"error": "Only buyers for this property can chat"}), 200
+            return jsonify({"error": "Only buyers for this property can chat"}), 400
               
         mqtt_topic = f"buyer_seller_chat/{topic_email}"
         mqtt_client.subscribe(mqtt_topic)
@@ -331,11 +331,11 @@ class BuyerSellerChatUsersListView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
 
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
 
         user_role = user.get('role')
         if user_role == 'realtor':
-            return jsonify({'error': 'Unauthorized access'}), 200
+            return jsonify({'error': 'Unauthorized access'}), 403
 
         buyer_receivers = get_receivers('buyer_id', user['uuid'])
         seller_receivers = get_receivers('seller_id', user['uuid'])
@@ -360,11 +360,11 @@ class BuyerSellerChatSearchView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
 
         user_role = user.get('role')
         if user_role == 'realtor':
-            return jsonify({'error': 'Unauthorized access'}), 200
+            return jsonify({'error': 'Unauthorized access'}), 403
 
         query = request.args.get('query')
         if not query:
@@ -420,7 +420,7 @@ class UserCustomerServicePropertySendMesssageView(MethodView):
             log_action(user['uuid'], user['role'], "viewed-customer_service-property-chat", {'property_id':  property_id})
             return jsonify(response), 200
         else:
-            return jsonify({"response": "No response found!"}), 200
+            return jsonify({"response": "No response found!"}), 404
 
 
     def post(self):
@@ -441,14 +441,14 @@ class UserCustomerServicePropertySendMesssageView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
 
         if not property_id or not property_address:
-            return jsonify({"error": "Missing property_id or address"}), 200
+            return jsonify({"error": "Missing property_id or address"}), 400
         
         if not message and not file:
-            return jsonify({'error': "Missing message content"}), 200
+            return jsonify({'error': "Missing message content"}), 400
         
         user_property = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': "Customer-Service"})
         if not user_property:
-            return jsonify({"error": "Property does not exist"}), 200
+            return jsonify({"error": "Property does not exist"}), 400
         
         chat_message = {
             'user_id': user['uuid'],
@@ -495,7 +495,7 @@ class UserCustomerServicePropertySendMesssageView(MethodView):
                 )
             else:
                 # Handle the case where the file has an invalid extension
-                return jsonify({"error": "Invalid file type. Allowed files are: {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}"}), 200
+                return jsonify({"error": "Invalid file type. Allowed files are: {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}"}), 415
   
         mqtt_topic = f"user_customer_service_property_chat/{user['email']}/{property_id}"
         mqtt_client.subscribe(mqtt_topic)
@@ -523,7 +523,7 @@ class UserCustomerServicePropertyChatUserList(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
       
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
 
         receivers = list(current_app.db.users_customer_service_property_chat.find({'user_id':user['uuid']}, {'_id':0}))
         if len(receivers) != 0:
@@ -539,4 +539,4 @@ class UserCustomerServicePropertyChatUserList(MethodView):
             log_action(user['uuid'], user['role'], "viwed-customer-service-property-chat-list", {})
             return jsonify(chat_user_list), 200
         else :
-            return jsonify([])
+            return jsonify([]), 200
