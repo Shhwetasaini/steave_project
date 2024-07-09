@@ -33,8 +33,8 @@ def create_app(config_name):
     try:
         # Connect to MongoDB
         mongo_client = MongoClient(
-            app.config['DB_HOST'], 
-            app.config['DB_PORT'], 
+            # app.config['DB_HOST'], 
+            # app.config['DB_PORT'], 
             username=app.config['DB_USER'], 
             password=app.config['DB_PASSWD']
         )

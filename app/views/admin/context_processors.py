@@ -23,7 +23,7 @@ class ContextProcessorsDataView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
         
         # Get all users
         users = list(current_app.db.users.find({}, {'_id': 0, 'otp': 0}))

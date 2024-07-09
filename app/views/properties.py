@@ -12,6 +12,7 @@ from flask.views import MethodView
 from flask import jsonify, request, current_app, url_for
 from flask_jwt_extended import get_jwt_identity
 from werkzeug.utils import secure_filename
+from pymongo import ReturnDocument
 
 from app.services.admin import log_request
 from app.services.authentication import custom_jwt_required, log_action
@@ -32,11 +33,11 @@ class SellerPropertyListView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
         
         user_role = user.get('role')
         if user_role == 'realtor':
-            return jsonify({'error': 'Unauthorized access'}), 200
+            return jsonify({'error': 'Unauthorized access'}), 401
 
         # Get properties associated with the seller
         property_transactions = current_app.db.property_seller_transaction.find({'seller_id': user['uuid']})
@@ -81,7 +82,7 @@ class AllPropertyListView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
         
         properties = current_app.db.properties.find()
 
@@ -145,10 +146,10 @@ class ExternalPropertyAddView(MethodView):
 
             # Insert lookup data into the lookup table
             current_app.db.property_seller_transaction.insert_one(lookup_data)
-            return jsonify({'message': 'Property added successfully.'})
+            return jsonify({'message': 'Property added successfully.'}), 200
         except Exception as e:
             logging.info("Externalproperty add error",  str(e))
-            return jsonify({'error': str(e)})
+            return jsonify({'error': str(e)}), 400
 
 
 class PropertyUpdateView(MethodView):
@@ -163,11 +164,11 @@ class PropertyUpdateView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         if user:
             if user.get('role') == 'realtor':
-                return jsonify({'error': 'Unauthorized access'}), 200
+                return jsonify({'error': 'Unauthorized access'}), 401
             property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
             property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
             if property_data is None or property_seller_data is None:
-                return jsonify({'error': 'Property does not Exists or you are not allowed to update this property'}), 200
+                return jsonify({'error': 'Property does not Exists or you are not allowed to update this property'}), 401
             updatable_fields = [
                 'description', 'price', 'size',
                 'name', 'status', 'address', 'state', 'city',
@@ -182,7 +183,7 @@ class PropertyUpdateView(MethodView):
             label = data.get('label')
             
             if not data and not files:
-                return jsonify({'error': 'No data in payload'})
+                return jsonify({'error': 'No data in payload'}),204
 
             update_data  = {}
             for key, value in request.form.items():
@@ -190,19 +191,19 @@ class PropertyUpdateView(MethodView):
                     if key == "address":
                         
                         if value.isdigit():
-                            return jsonify({'error': 'seller_address and property_type field is required'})
+                            return jsonify({'error': 'seller_address and property_type field is required'}), 400
                         
                         # Check if the address contains "US" or "United States" or "États-Unis"
                         if not re.search(r'\b(US|United States|USA|États-Unis|U\.S\.?)\b', value, flags=re.IGNORECASE):
-                            return jsonify({'error': 'Please enter a valid address in the United States.'})
+                            return jsonify({'error': 'Please enter a valid address in the United States.'}), 400
                         
                         # Check if seller_property_address is present in e_sign_data and contains mn, minnesota, fl, or florida
                         if not any(keyword in  value.lower() for keyword in ['mn', 'minnesota', 'fl', 'florida']):
-                            return jsonify({'error': "The address must be located in Minnesota (MN) or Florida (FL)."})
+                            return jsonify({'error': "The address must be located in Minnesota (MN) or Florida (FL)."}), 400
                         
                         valid_address = validate_address(value)
                         if not valid_address:
-                            return jsonify({'error': "Invalid Address. missing country, state or postal_code"})
+                            return jsonify({'error': "Invalid Address. missing country, state or postal_code"}), 400
                         
                         update_data[key] = value
 
@@ -211,7 +212,7 @@ class PropertyUpdateView(MethodView):
                             update_data[key] = float(value)
                         except ValueError:
                             if value.strip() != '':
-                                return jsonify({'error':'only float values are accepted for price, longitude, latitude, size, garage_size'})
+                                return jsonify({'error':'only float values are accepted for price, longitude, latitude, size, garage_size'}), 400
                             pass
                     
                     elif key in ["beds", "baths", "kitchen", "full_bathrooms", "half_bathrooms", "attached_garage"]:
@@ -219,7 +220,7 @@ class PropertyUpdateView(MethodView):
                             update_data[key] = int(value)
                         except ValueError:
                             if value.strip() != '':
-                                return jsonify({'error':'only integer values are accepted for beds, baths, kitchen, full_bathrooms, half_bathrooms, attached_garage'})
+                                return jsonify({'error':'only integer values are accepted for beds, baths, kitchen, full_bathrooms, half_bathrooms, attached_garage'}), 400
                             pass  
                     elif key in ["appliances", "kitchen_features", "features", "type_and_styles", "materials"]:
                         try:
@@ -227,7 +228,7 @@ class PropertyUpdateView(MethodView):
                         except json.JSONDecodeError as e:
                             return {'error':f"JSON decoding error: {e}"}
                         if type(value) != list:
-                            return jsonify({'error':'only array of values are accepted for appliances, kitchen_features, features, type_and_styles, materials'}) 
+                            return jsonify({'error':'only array of values are accepted for appliances, kitchen_features, features, type_and_styles, materials'}), 400
                         
                         current_app.db.properties.update_one(
                             {'_id': ObjectId(property_id)},
@@ -241,7 +242,7 @@ class PropertyUpdateView(MethodView):
             # Add image if provided
             if 'image' in request.files:
                 if not label:
-                    return jsonify({'error': 'Missing image label'})
+                    return jsonify({'error': 'Missing image label'}), 400
 
                 file = request.files['image']
                 org_filename = secure_filename(file.filename)
@@ -251,10 +252,10 @@ class PropertyUpdateView(MethodView):
                 os.makedirs(user_media_dir, exist_ok=True)
                 
                 if os.path.exists(os.path.join(user_media_dir, filename)):
-                    return jsonify({'error': 'File with the same name already exists in the folder'}), 200
+                    return jsonify({'error': 'File with the same name already exists in the folder'}), 400
                 # Check if image with same name already exists in database
                 if any(org_filename == image_name for image_name in [image.get('name') for image in property_data.get('images', [])]):
-                    return jsonify({'error': 'File with the same name already exists in the database'}), 200
+                    return jsonify({'error': 'File with the same name already exists in the database'}), 400
                 
                 image_path = os.path.join(user_media_dir, filename)
                 file.save(image_path)
@@ -270,7 +271,7 @@ class PropertyUpdateView(MethodView):
             log_action(user['uuid'], user['role'], "updated-property", update_data)
             return jsonify({'message': 'Property information updated successfully'}), 200
         else:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
 
 
 class PanoramicImageView(MethodView):
@@ -287,15 +288,15 @@ class PanoramicImageView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
 
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
         
         user_role = user.get('role')
         if user_role == 'realtor':
-            return jsonify({'error': 'Unauthorized access'}), 200
+            return jsonify({'error': 'Unauthorized access'}), 401
 
 
         if 'panoramic_image' not in request.files:
-            return jsonify({"error": "No image part"}), 200
+            return jsonify({"error": "No image part"}), 400
 
         panoramic_image = request.files.get('panoramic_image')
         property_id = request.form.get('property_id')
@@ -308,58 +309,58 @@ class PanoramicImageView(MethodView):
         missing_fields = [field for field, value in {'property_id': property_id,'property_version': property_version,'order': order,'room_label': room_label,'latitude': latitude,'longitude': longitude}.items() if not value]
 
         if missing_fields:
-            return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 200
+            return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
 
         try:
             property_version = int(property_version)
         except ValueError:
-            return jsonify({"error": "Invalid property_version value, must be an integer"}), 200
+            return jsonify({"error": "Invalid property_version value, must be an integer"}), 400
         try:
             order = int(order)
         except ValueError:
-            return jsonify({"error": "Invalid order value, must be an integer"}), 200
+            return jsonify({"error": "Invalid order value, must be an integer"}), 400
         try:
             latitude = float(latitude)
         except ValueError:
-            return jsonify({"error": "Invalid latitude value, must be a float"}), 200
+            return jsonify({"error": "Invalid latitude value, must be a float"}), 400
         try:
             longitude = float(longitude)
         except ValueError:
-            return jsonify({"error": "Invalid longitude value, must be a float"}), 200
+            return jsonify({"error": "Invalid longitude value, must be a float"}), 400
 
         user_property = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
         seller_transaction_property = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
         if not user_property or not seller_transaction_property:
-            return jsonify({"error": "Property not found"}), 200
+            return jsonify({"error": "Property not found"}), 404
 
         panoramic_images = user_property.get('panoramic_images', [])
         existing_versions = [pano.get('property_version') for pano in panoramic_images]
 
         if not existing_versions and property_version != 1:
-            return jsonify({'error': 'Invalid property_version. Start from 1.'}), 200
+            return jsonify({'error': 'Invalid property_version. Start from 1.'}), 400
 
         if existing_versions:
             max_existing_version = max(existing_versions)
             if property_version not in existing_versions and property_version != max_existing_version + 1:
-                return jsonify({'error': f'Invalid property_version. The next version should start from {max_existing_version + 1}.'}), 200
+                return jsonify({'error': f'Invalid property_version. The next version should start from {max_existing_version + 1}.'}), 400
 
         property_version_images = next((pano for pano in panoramic_images if pano.get('property_version') == property_version), None)
         
         image_data = save_panoramic_image(panoramic_image=panoramic_image, user=user, property_id=property_id)
         if 'error' in image_data:
-            return jsonify({'error': image_data.get('error')})
+            return jsonify({'error': image_data.get('error')}), 415
         if property_version_images:
             current_orders = [img['order'] for img in property_version_images.get('3d_images', [])]
 
             existing_image = next((img for img in property_version_images['3d_images'] if img['order'] == order), None)
             if existing_image:
-                return jsonify({'error': "panoramic Image already exists for this order, delete it first"}), 200
+                return jsonify({'error': "panoramic Image already exists for this order, delete it first"}), 400
 
             else:
                 
                 # Add new image to the existing property version
                 if current_orders and order != max(current_orders) + 1:
-                    return jsonify({"error": f"Wrong Order Value, Order value should start from {max(current_orders) + 1}"}), 200
+                    return jsonify({"error": f"Wrong Order Value, Order value should start from {max(current_orders) + 1}"}), 400
                 new_image = {
                     "order": order,
                     "room_label": room_label,
@@ -380,7 +381,7 @@ class PanoramicImageView(MethodView):
         else:
             # Creating a new property version
             if order != 1:
-                return jsonify({'error': 'Wrong Order Value, Order value should start from 1'}), 200
+                return jsonify({'error': 'Wrong Order Value, Order value should start from 1'}), 400
 
             new_property_version_images = {
                 'property_version': property_version,
@@ -413,11 +414,11 @@ class PanoramicImageView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
 
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
         
         user_role = user.get('role')
         if user_role == 'realtor':
-            return jsonify({'error': 'Unauthorized access'}), 200
+            return jsonify({'error': 'Unauthorized access'}), 401
 
 
         logging.info(f"Fetching all panoramic images for property ID: {property_id}")
@@ -425,7 +426,7 @@ class PanoramicImageView(MethodView):
         user_property = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
         seller_transaction_property = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
         if not user_property or not seller_transaction_property:
-            return jsonify({"error": "Property not found"}), 200
+            return jsonify({"error": "Property not found"}), 404
         
         panoramas = user_property.get('panoramic_images', [])
         sorted_panoramas = []
@@ -449,10 +450,10 @@ class PanoramicImageView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
 
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
 
         if user.get('role') == 'realtor':
-            return jsonify({'error': 'Unauthorized access'}), 200
+            return jsonify({'error': 'Unauthorized access'}), 401
         
         property_version = int(property_version)
         order = int(order)
@@ -460,7 +461,7 @@ class PanoramicImageView(MethodView):
         user_property = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
         seller_transaction_property = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
         if not all([user_property, seller_transaction_property]):
-            return jsonify({"error": "Property not found"}), 200
+            return jsonify({"error": "Property not found"}), 404
         
         panoramic_images = user_property.get('panoramic_images', [])
         
@@ -486,10 +487,10 @@ class PanoramicImageView(MethodView):
                 updated_panoramic_images.append(panorama)
 
         if not property_version_exists:
-            return jsonify({'error': "property_version does not exist"}), 200
+            return jsonify({'error': "property_version does not exist"}), 400
 
         if not order_exists:
-            return jsonify({'error': "order does not exist in the specified property_version"}), 200
+            return jsonify({'error': "order does not exist in the specified property_version"}), 400
 
         current_app.db.properties.update_one(
             {"_id": ObjectId(property_id)},
@@ -514,11 +515,11 @@ class PropertyImageLabelUpdateView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
 
         if not user:
-            return jsonify({'error': 'User not found'}), 200
+            return jsonify({'error': 'User not found'}), 404
         
         user_role = user.get('role')
         if user_role == 'realtor':
-            return jsonify({'error': 'Unauthorized access'}), 200
+            return jsonify({'error': 'Unauthorized access'}), 401
 
         
         data = request.json
@@ -528,12 +529,12 @@ class PropertyImageLabelUpdateView(MethodView):
         new_label = data.get('new_label')
 
         if not property_id or not image_name or not new_label:
-            return jsonify({'error': 'property_id, image_name, or new_label is missing in the request body'})
+            return jsonify({'error': 'property_id, image_name, or new_label is missing in the request body'}), 400
 
         property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
         property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
         if property_data is None or property_seller_data is None:
-            return jsonify({'error': 'Property does not Exists or you are not allowed to update this property'}), 200
+            return jsonify({'error': 'Property does not Exists or you are not allowed to update this property'}), 400
 
         # Update the image URL and label in the database
         result = current_app.db.properties.update_one(
@@ -543,9 +544,9 @@ class PropertyImageLabelUpdateView(MethodView):
 
         # Check if the update was successful
         if result.modified_count > 0:
-            return jsonify({"message": "Image updated successfully"})
+            return jsonify({"message": "Image updated successfully"}), 200
         else:
-            return jsonify({"error": "Image not found or update failed"})
+            return jsonify({"error": "Image not found or update failed"}), 404
 
 
 class PropertyImageDeleteView(MethodView): 
@@ -562,10 +563,10 @@ class PropertyImageDeleteView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
 
         if not user:
-            return jsonify({'error': 'User not found'})
+            return jsonify({'error': 'User not found'}), 404
 
         if user.get('role') == 'realtor':
-            return jsonify({'error': 'Unauthorized access'})
+            return jsonify({'error': 'Unauthorized access'}), 401
 
         data = request.json
         property_id = data.get('property_id')
@@ -573,13 +574,13 @@ class PropertyImageDeleteView(MethodView):
         label = data.get('label')
 
         if not property_id or not image_url or not label:
-            return jsonify({'error': 'property_id, image_url, or label is missing in the request body'})
+            return jsonify({'error': 'property_id, image_url, or label is missing in the request body'}), 400
 
         property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
         property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
 
         if not property_data or not property_seller_data:
-            return jsonify({'error': 'Property does not exist or you are not allowed to delete image from this property'})
+            return jsonify({'error': 'Property does not exist or you are not allowed to delete image from this property'}), 400
 
         file_name = os.path.basename(image_url)
         user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id))
@@ -588,7 +589,7 @@ class PropertyImageDeleteView(MethodView):
         print(file_path)
 
         if not os.path.exists(file_path):
-            return jsonify({"error": "File does not exist"})
+            return jsonify({"error": "File does not exist"}),404
 
         os.remove(file_path)
 
@@ -598,7 +599,7 @@ class PropertyImageDeleteView(MethodView):
         image_to_remove = next((image for image in property_images if image['image_url'] == image_url and image['label'] == label), None)
 
         if not image_to_remove:
-            return jsonify({"error": "Image with the specified URL and label does not exist"})
+            return jsonify({"error": "Image with the specified URL and label does not exist"}), 400
 
         # Remove the image object from the property_data's images list
         property_images.remove(image_to_remove)
@@ -610,10 +611,10 @@ class PropertyImageDeleteView(MethodView):
         )
 
         if result.modified_count == 0:
-            return jsonify({'error': 'Failed to delete the image'})
+            return jsonify({'error': 'Failed to delete the image'}), 400
 
         log_action(user['uuid'], user['role'], "deleted-property-image", data)
-        return jsonify({'message': 'Image deleted successfully'})
+        return jsonify({'message': 'Image deleted successfully'}), 200
 
 
 class PropertySearchView(MethodView):
@@ -630,23 +631,23 @@ class PropertySearchView(MethodView):
             user = current_app.db.users.find_one({'uuid': current_user})
         
         if not user:
-            return jsonify({'error': 'User not found'})
+            return jsonify({'error': 'User not found'}), 404
         
         user_role = user.get('role')
         if user_role == 'realtor':
-            return jsonify({'error': 'Unauthorized access'})
+            return jsonify({'error': 'Unauthorized access'}), 401
         
         data = request.json
         locations = data.get('location_points', [])
 
         if not locations:
-            return jsonify({'error': 'Invalid input data. At least one set of four coordinates is required.'})
+            return jsonify({'error': 'Invalid input data. At least one set of four coordinates is required.'}), 400
 
         all_valid_properties = []
 
         for location in locations:
             if len(location) != 4:
-                return jsonify({'error': 'Invalid input data. Each set must contain exactly four coordinates.'})
+                return jsonify({'error': 'Invalid input data. Each set must contain exactly four coordinates.'}), 400
 
             # Extract bounding box coordinates
             min_lat = min(point["lat"] for point in location)
@@ -676,4 +677,120 @@ class PropertySearchView(MethodView):
                     all_valid_properties.append(property)
 
         log_action(user['uuid'], user['role'], "searched-properties", {'payload_data': data})
-        return jsonify(all_valid_properties)
+        return jsonify(all_valid_properties), 200
+    
+
+class FavoritePropertyView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def get(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        liked_properties = user.get('liked_properties', [])
+        log_action(user['uuid'], user['role'], "viewed-all-liked-property", {})
+        return jsonify(liked_properties), 200
+
+    def post(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        if user.get('role') == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 401
+        if request.is_json:
+            data = request.json
+        else:
+            return jsonify({"error": "Unsupported Content Type"}), 415
+        
+        property_id = data.get('property_id')
+
+        if not property_id:
+            return jsonify({'error': 'Missing required parameters'}), 400
+
+        try:
+            property_object_id = ObjectId(property_id)
+            property = current_app.db.properties.find_one({"_id": property_object_id})
+            property_transaction = current_app.db.property_seller_transaction.find_one({"property_id": property_id})
+            if not property or not property_transaction:
+                return jsonify({'error': 'Property does not exist or invalid property_id'}), 404
+
+            updated_user = current_app.db.users.find_one_and_update(
+                {"uuid": user['uuid']},
+                {"$addToSet": {"liked_properties": property_id}},
+                return_document=ReturnDocument.AFTER
+            )
+            log_action(user['uuid'], user['role'], "liked-property", {'payload_data': data})
+            return jsonify(updated_user.get('liked_properties', [])), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    def delete(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        if user.get('role') == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 401
+        if request.is_json:
+            data = request.json
+        else:
+            return jsonify({"error": "Unsupported Content Type"}), 415
+        property_id = data.get('property_id')
+
+        if not property_id:
+            return jsonify({'error': 'Missing required parameters'}), 400
+
+        try:
+            property_object_id = ObjectId(property_id)
+            property = current_app.db.properties.find_one({"_id": property_object_id})
+            property_transaction = current_app.db.property_seller_transaction.find_one({"property_id": property_id})
+            if not property or not property_transaction:
+                return jsonify({'error': 'Property does not exist or invalid property_id'}), 404
+
+            updated_user = current_app.db.users.find_one_and_update(
+                {"uuid": user['uuid']},
+                {"$pull": {"liked_properties": property_id}},
+                return_document=ReturnDocument.AFTER
+            )
+            log_action(user['uuid'], user['role'], "disliked-property", {'payload_data': data})
+            return jsonify(updated_user.get('liked_properties', [])), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+
+
+
+
+
+
+
+
+
+
+
