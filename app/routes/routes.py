@@ -58,6 +58,7 @@ api_bp.add_url_rule(rule='user/properties/panoramic_images', view_func=Panoramic
 api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>', view_func=PanoramicImageView.as_view('user_properties_get_panoramic_images'))
 api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>/<int:property_version>/<int:order>', view_func=PanoramicImageView.as_view('user_properties_delete_panoramic_images'))
 api_bp.add_url_rule(rule='user/properties/search', view_func=PropertySearchView.as_view('user_property_search'))
+api_bp.add_url_rule(rule='user/properties/favorite', view_func=FavoritePropertyView.as_view('user_property_favorite'))
 
 # Admin UI APIs
 api_bp.add_url_rule(rule='/admin/context-processor', view_func=ContextProcessorsDataView.as_view('admin_context_processor'))

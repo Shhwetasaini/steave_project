@@ -12,6 +12,7 @@ from flask.views import MethodView
 from flask import jsonify, request, current_app, url_for
 from flask_jwt_extended import get_jwt_identity
 from werkzeug.utils import secure_filename
+from pymongo import ReturnDocument
 
 from app.services.admin import log_request
 from app.services.authentication import custom_jwt_required, log_action
@@ -677,3 +678,105 @@ class PropertySearchView(MethodView):
 
         log_action(user['uuid'], user['role'], "searched-properties", {'payload_data': data})
         return jsonify(all_valid_properties)
+
+
+class FavoritePropertyView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def get(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        liked_properties = user.get('liked_properties', [])
+        log_action(user['uuid'], user['role'], "viewed-all-liked-property", {})
+        return jsonify({'liked_properties': liked_properties}), 200
+
+    def post(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        if user.get('role') == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 401
+        if request.is_json:
+            data = request.json
+        else:
+            return jsonify({"error": "Unsupported Content Type"}), 415
+        
+        property_id = data.get('property_id')
+
+        if not property_id:
+            return jsonify({'error': 'Missing required parameters'}), 400
+
+        try:
+            property_id = ObjectId(property_id)
+            property = current_app.db.properties.find_one({"_id": property_id})
+            if not property:
+                return jsonify({'error': 'Property does not exist or invalid property_id'}), 404
+
+            updated_user = current_app.db.users.find_one_and_update(
+                {"uuid": user['uuid']},
+                {"$addToSet": {"liked_properties": property_id}},
+                return_document=ReturnDocument.AFTER
+            )
+            log_action(user['uuid'], user['role'], "liked-property", {'payload_data': data})
+            return jsonify({'liked_properties': updated_user.get('liked_properties', [])}), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    def delete(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        if user.get('role') == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 401
+        if request.is_json:
+            data = request.json
+        else:
+            return jsonify({"error": "Unsupported Content Type"}), 415
+        property_id = data.get('property_id')
+
+        if not property_id:
+            return jsonify({'error': 'Missing required parameters'}), 400
+
+        try:
+            property_id = ObjectId(property_id)
+            property = current_app.db.properties.find_one({"_id": property_id})
+            if not property:
+                return jsonify({'error': 'Property does not exist or invalid property_id'}), 404
+
+            updated_user = current_app.db.users.find_one_and_update(
+                {"uuid": user['uuid']},
+                {"$pull": {"liked_properties": property_id}},
+                return_document=ReturnDocument.AFTER
+            )
+            log_action(user['uuid'], user['role'], "disliked-property", {'payload_data': data})
+            return jsonify({'liked_properties': updated_user.get('liked_properties', [])}), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500

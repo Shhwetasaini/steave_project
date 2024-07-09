@@ -741,7 +741,7 @@ class DocumentPrefillAnswerView(MethodView):
                 return jsonify({'error': 'User not found'}), 404
             
             # Check if all required parameters are present in the request payload
-            required_params = ['street_number', 'street_name', 'city', 'state']
+            required_params = ['street_number', 'street_name', 'city', 'state', 'required_fields']
             if not all(param in request.json for param in required_params):
                 return jsonify({'error': 'Missing required parameters'}), 400
             payload = {
