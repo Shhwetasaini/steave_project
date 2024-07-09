@@ -179,7 +179,7 @@ def insert_answer_in_pdf(doc_path, answer_locations, answer, user, values, filen
                         x = location['startX']
                         y = letter[1] - location['endY'] + 2
                         max_width = location['endX'] - location['startX']
-                        text = answer
+                        text = str(answer)
                         for i in range(len(text), -1, -1):
                             if can.stringWidth(text[:i], "Helvetica", 12) <= max_width:
                                 can.drawString(x, y, text[:i])
