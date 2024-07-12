@@ -68,7 +68,7 @@ def check_answer_type(answer):
         answer_type = 'number'
     elif type(answer) == str:
         if is_datetime_string(answer):
-            answer_type = 'dateTime'
+            answer_type = 'datetime'
         else:
             answer_type = 'text'
     elif type(answer) == bool:

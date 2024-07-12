@@ -36,7 +36,9 @@ class SaveUserMessageView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-
+            
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         if not message and not file:
             return jsonify({'message': "Missing message content"}), 400
         
@@ -401,7 +403,8 @@ class UserCustomerServicePropertySendMesssageView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         #updating message status
         current_app.db.users_customer_service_property_chat.update_one(
             {'user_id':  user['uuid'], 'property_id': property_id, 'message_content.is_response': True},
@@ -439,7 +442,9 @@ class UserCustomerServicePropertySendMesssageView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-
+            
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         if not property_id or not property_address:
             return jsonify({"error": "Missing property_id or address"}), 400
         

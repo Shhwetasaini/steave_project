@@ -251,7 +251,9 @@ class UpdateUsersView(MethodView):
             validate_email(current_user)
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
-            user = current_app.db.users.find_one({'uuid': current_user})
+            user = current_app.db.users.find_one({'uuid': current_user})    
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         
         update_doc = {}
 

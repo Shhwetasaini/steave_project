@@ -171,10 +171,10 @@ class PropertyUpdateView(MethodView):
                 return jsonify({'error': 'Property does not Exists or you are not allowed to update this property'}), 401
             updatable_fields = [
                 'description', 'price', 'size',
-                'name', 'status', 'address', 'state', 'city',
+                'name', 'status','construction', 'address', 'state', 'city',
                 'latitude', 'longitude', 'beds', 'baths', 'kitchen',
                 'full_bathrooms', 'half_bathrooms', 'built_in', 'attached_garage',
-                'garage_size', 'appliances', 'kitchen_features', 'features'
+                'garage_size', 'appliances', 'kitchen_features', 'features',
                 'type_and_styles', 'materials'
             ]
 
@@ -224,6 +224,7 @@ class PropertyUpdateView(MethodView):
                             pass  
                     elif key in ["appliances", "kitchen_features", "features", "type_and_styles", "materials"]:
                         try:
+                            value = value.replace("'", '"')
                             value = json.loads(value)
                         except json.JSONDecodeError as e:
                             return {'error':f"JSON decoding error: {e}"}
@@ -617,9 +618,88 @@ class PropertyImageDeleteView(MethodView):
         return jsonify({'message': 'Image deleted successfully'}), 200
 
 
-class PropertySearchView(MethodView):
+class PropertySearchFilterView(MethodView):
     decorators = [custom_jwt_required()]
+    
+    def get(self):
+        log_request()
+        current_user = get_jwt_identity()
 
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        filters = request.args.to_dict()
+        query = {}
+        
+        if not filters.get('min_price') and filters.get('max_price'):
+            return jsonify({"error": "min price can not be empty with max_price"}), 400
+        
+        if filters.get('min_price') or not filters.get('max_price'):
+            try:
+                min_price = float(filters['min_price'])
+                if not min_price in [0.0, 100.0, 200.0, 300.0]:
+                    return jsonify({"error": "Invalid min_price range"}), 400
+                min_price = min_price * 1000
+                query['price'] = {'$gte': min_price}
+            except ValueError:
+                return jsonify({"error": "min price value must be integer"}), 400
+            
+        if filters.get('max_price'):
+            try:
+                max_price = float(filters['max_price'])
+                if not max_price in [100.0, 200.0, 300.0]:
+                    return jsonify({"error": "Invalid max_price range"}), 400
+                max_price = max_price * 1000
+                query['price'].update({'$lt': max_price})
+            except ValueError:
+                return jsonify({"error": "max price value must be integer"}), 400
+        
+            if min_price >= max_price:
+                return jsonify({"error": "Minimum price must be less than maximum price"}), 400
+        
+        if 'status' in filters:
+            valid_statuses = ['Sale', 'Pending', 'Sold', 'cancelled']
+            if filters['status'] not in valid_statuses:
+                return jsonify({"error": f"Invalid status '{filters['status']}'."}), 400
+            query['status'] = filters['status']
+        if 'bedrooms' in filters:
+            try:
+                beds = int(filters['bedrooms'])
+                if beds < 0:
+                    return jsonify({"error": "Number of bedrooms cannot be negative."}), 400
+                query['beds'] = beds
+            except ValueError:
+                return jsonify({"error": "Invalid value for bedrooms. Must be a valid integer."}), 400
+        if 'bathrooms' in filters:
+            try:
+                baths = int(filters['bathrooms'])
+                if baths < 0:
+                    return jsonify({"error": "Number of bathrooms cannot be negative."}), 400
+                query['baths'] = baths
+            except ValueError:
+                return jsonify({"error": "Invalid value for bathrooms. Must be a valid integer."}), 400
+
+        if 'home_type' in filters:
+            valid_home_types = ['Single Family', 'Multi Family', 'Condo', 'Townhouse','Single']
+            if filters['home_type'] not in valid_home_types:
+                return jsonify({"error": f"Invalid Home Type '{filters['home_type']}'."}), 400
+            query['type'] = filters['home_type']
+        
+        properties_collection = current_app.db.properties
+        filtered_properties = list(properties_collection.find(query))
+
+        for property in filtered_properties:
+            property['_id'] = str(property['_id'])
+
+        log_action(user['uuid'], user['role'], "filtered-properties", {'filters': filters})
+        return jsonify(filtered_properties), 200
+    
     def post(self):
         log_request()
         current_user = get_jwt_identity()
@@ -672,7 +752,7 @@ class PropertySearchView(MethodView):
             # Fetch property IDs and filter valid properties
             for property in filtered_properties:
                 property['_id'] = str(property.pop('_id'))
-                valid_property = current_app.db.property_seller_transaction.find_one({'property_id': property['_id']})
+                valid_property = current_app.db.property_seller_transaction.find_one({"property_id": property["_id"]})
                 if valid_property:
                     all_valid_properties.append(property)
 
@@ -728,7 +808,7 @@ class FavoritePropertyView(MethodView):
         try:
             property_object_id = ObjectId(property_id)
             property = current_app.db.properties.find_one({"_id": property_object_id})
-            property_transaction = current_app.db.property_seller_transaction.find_one({"property_id": property_id})
+            property_transaction = current_app.db.property_seller_transaction.find_one({"property_id": property_id, "seller_id": user["uuid"]})
             if not property or not property_transaction:
                 return jsonify({'error': 'Property does not exist or invalid property_id'}), 404
 
@@ -769,7 +849,7 @@ class FavoritePropertyView(MethodView):
         try:
             property_object_id = ObjectId(property_id)
             property = current_app.db.properties.find_one({"_id": property_object_id})
-            property_transaction = current_app.db.property_seller_transaction.find_one({"property_id": property_id})
+            property_transaction = current_app.db.property_seller_transaction.find_one({"property_id": property_id, "seller_id": user["uuid"]})
             if not property or not property_transaction:
                 return jsonify({'error': 'Property does not exist or invalid property_id'}), 404
 

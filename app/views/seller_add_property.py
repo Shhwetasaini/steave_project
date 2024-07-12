@@ -83,6 +83,7 @@ class PropertyTypeSelectionView(MethodView):
             'panoramic_images': [],
             "name": data.get('name', None),
             "status": data.get('status', None),
+            "construction": data.get('construction', None),
             "state": data.get('state', None),
             "city": data.get('city', None),
             "latitude": float(data.get('latitude', 0.0) or 0.0),

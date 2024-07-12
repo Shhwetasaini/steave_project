@@ -35,7 +35,9 @@ class ReceiveMediaView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-        
+            
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         # Handle both JSON and multipart/form-data for receiving files
         if not request.content_type.startswith('multipart/form-data'):
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
@@ -88,6 +90,8 @@ class SendMediaView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
 
         all_media = current_app.db.media.find_one({'user_id': user['uuid']}, {'_id': 0})
 
@@ -110,7 +114,8 @@ class DeleteMediaView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         # Check if file URL is provided
         file_url = request.form.get('file_url')
         if not file_url:
@@ -154,7 +159,9 @@ class DownloadDocView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-
+            
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         if not request.content_type.startswith('multipart/form-data'):
             return jsonify({"error": "Unsupported Content Type"}), 415
         data = request.form
@@ -215,7 +222,10 @@ class UploadDocView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
         file = request.files.get('file')
         if not file:
             return jsonify({'error': 'File is missing!'}), 400  # Bad Request
@@ -262,6 +272,8 @@ class AllDocsView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         
         flforms_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'FL_Forms')
         mnforms_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms')
@@ -541,7 +553,7 @@ class DocAnswerInsertionView(MethodView):
                         "answer_input_type": question.get("answer_locations", [])[0].get("answerInputType"),
                         "answer_data_type": question.get("answer_locations", [])[0].get("answerOutputType")
                     }
-                    if question.get("answer_locations", [])[0].get("answerInputType") == 'multiple-checkbox':
+                    if question.get("answer_locations", [])[0].get("answerInputType") in ('multiple-checkbox-single-choice-answer', 'multiple-checkbox-multiple-choice-answer'):
                         position_dict = {}
                         answer_locations = question.get("answer_locations", [])
                         for location in answer_locations:
