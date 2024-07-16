@@ -677,7 +677,7 @@ class PropertySearchFilterView(MethodView):
         if 'status' in filters:
             valid_statuses = validate_property_status(filters['status'])
             if not valid_statuses:
-                return jsonify({"error": f"Invalid status '{filters['status']}'."}), 400
+                return jsonify({"error": f"Invalid status, valid status : [Pending, For Sale, Sold]"}), 400
             query['status'] = filters['status']
         if 'bedrooms' in filters:
             try:
@@ -699,7 +699,7 @@ class PropertySearchFilterView(MethodView):
         if 'home_type' in filters:
             valid_home_types = validate_property_type(filters['home_type'])
             if not valid_home_types:
-                return jsonify({"error": f"Invalid Home Type '{filters['home_type']}'."}), 400
+                return jsonify({"error": f"Invalid Home Type, valid home types : [Condo, Townhouse, Single Family, Multifamily]"}), 400
             query['type'] = filters['home_type']
         
         properties_collection = current_app.db.properties

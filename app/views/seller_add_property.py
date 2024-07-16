@@ -84,10 +84,10 @@ class PropertyTypeSelectionView(MethodView):
         # Validate property_type
         valid_property_type = validate_property_type(property_type)
         if not valid_property_type:
-            return jsonify({'error': f"Invalid property_type. applicable types are: [Single, Condo, Townhouse, Single Family, Multi Family]"}), 400
+            return jsonify({'error': f"Invalid property_type. applicable types are: [Condo, Townhouse, Single Family, Multifamily]"}), 400
         
         # Validate property_status
-        if property_status is not None or property_status != '':
+        if property_status is not None and property_status != '':
             valid_status = validate_property_status(property_status)
             if not valid_status:
                 return jsonify({'error': f"Invalid status. applicable status are: [For Sale, Pending, Sold, Cancelled]"}), 400

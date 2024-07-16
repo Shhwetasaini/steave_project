@@ -369,7 +369,7 @@ def search_customer_service_mesage(query, user_uuid):
     return response
 
 def validate_property_type(property_type):
-    valid_types = ['Single Family', 'Multi Family', 'Condo', 'Townhouse', 'Single']
+    valid_types = ['Single Family', 'Multifamily', 'Condo', 'Townhouse']
     return property_type in valid_types
 
 def validate_property_status(property_status):
