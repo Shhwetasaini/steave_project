@@ -17,6 +17,7 @@ from pymongo import ReturnDocument
 from app.services.admin import log_request
 from app.services.authentication import custom_jwt_required, log_action
 from app.services.properties import validate_address, save_panoramic_image
+from app.services.properties import validate_property_status, validate_property_type
 
 
 class SellerPropertyListView(MethodView):
@@ -49,7 +50,7 @@ class SellerPropertyListView(MethodView):
             # Fetch property details from properties collection
             property_info = current_app.db.properties.find_one({'_id': ObjectId(property_id)}, {'_id': 0})
             if property_info:
-                if property_info.get('status') == 'cancelled':
+                if property_info.get('status') == 'Cancelled':
                     continue
                 property_info['property_id'] = property_id
                 owner_info = {
@@ -90,7 +91,7 @@ class AllPropertyListView(MethodView):
         for prop in properties:
             lookup_info = current_app.db.property_seller_transaction.find_one({'property_id': str(prop['_id'])})
             if lookup_info: 
-                if prop.get('status') == 'cancelled':
+                if prop.get('status') == 'Cancelled':
                     continue
                 property_id = str(prop.pop('_id', None))
                 prop['property_id'] = property_id
@@ -146,7 +147,7 @@ class ExternalPropertyAddView(MethodView):
 
             # Insert lookup data into the lookup table
             current_app.db.property_seller_transaction.insert_one(lookup_data)
-            return jsonify({'message': 'Property added successfully.'}), 200
+            return jsonify({'message': 'Property added successfully.'}), 201
         except Exception as e:
             logging.info("Externalproperty add error",  str(e))
             return jsonify({'error': str(e)}), 400
@@ -206,7 +207,12 @@ class PropertyUpdateView(MethodView):
                             return jsonify({'error': "Invalid Address. missing country, state or postal_code"}), 400
                         
                         update_data[key] = value
-
+                    elif key == "status":
+                        valid_statuses = ['Cancelled', 'For Sale', 'Pending', 'Sold']
+                        if value not in valid_statuses:
+                            return jsonify({'error': f"Invalid status value. Status should be one of {', '.join(valid_statuses)}"}), 400
+                        update_data[key] = value
+                        
                     elif key in ["price", "longitude", "latitude", "size", "garage_size"]:
                         try:
                             update_data[key] = float(value)
@@ -635,37 +641,42 @@ class PropertySearchFilterView(MethodView):
             return jsonify({'error': 'User not found'}), 404
         
         filters = request.args.to_dict()
-        query = {}
+        query = {'status': {'$ne': 'Cancelled'}}
         
         if not filters.get('min_price') and filters.get('max_price'):
             return jsonify({"error": "min price can not be empty with max_price"}), 400
         
-        if filters.get('min_price') or not filters.get('max_price'):
+        
+        if filters.get('min_price'):
             try:
                 min_price = float(filters['min_price'])
-                if not min_price in [0.0, 100.0, 200.0, 300.0]:
+                if min_price not in [0.0, 100.0, 200.0, 300.0]:
                     return jsonify({"error": "Invalid min_price range"}), 400
                 min_price = min_price * 1000
                 query['price'] = {'$gte': min_price}
             except ValueError:
                 return jsonify({"error": "min price value must be integer"}), 400
-            
+                
         if filters.get('max_price'):
             try:
                 max_price = float(filters['max_price'])
-                if not max_price in [100.0, 200.0, 300.0]:
+                if max_price not in [100.0, 200.0, 300.0]:
                     return jsonify({"error": "Invalid max_price range"}), 400
                 max_price = max_price * 1000
-                query['price'].update({'$lt': max_price})
+                if 'price' in query:
+                    query['price'].update({'$lt': max_price})
+                else:
+                    query['price'] = {'$lt': max_price}
             except ValueError:
                 return jsonify({"error": "max price value must be integer"}), 400
-        
-            if min_price >= max_price:
+            
+            if min_price is not None and min_price >= max_price:
                 return jsonify({"error": "Minimum price must be less than maximum price"}), 400
+    
         
         if 'status' in filters:
-            valid_statuses = ['Sale', 'Pending', 'Sold', 'cancelled']
-            if filters['status'] not in valid_statuses:
+            valid_statuses = validate_property_status(filters['status'])
+            if not valid_statuses:
                 return jsonify({"error": f"Invalid status '{filters['status']}'."}), 400
             query['status'] = filters['status']
         if 'bedrooms' in filters:
@@ -686,8 +697,8 @@ class PropertySearchFilterView(MethodView):
                 return jsonify({"error": "Invalid value for bathrooms. Must be a valid integer."}), 400
 
         if 'home_type' in filters:
-            valid_home_types = ['Single Family', 'Multi Family', 'Condo', 'Townhouse','Single']
-            if filters['home_type'] not in valid_home_types:
+            valid_home_types = validate_property_type(filters['home_type'])
+            if not valid_home_types:
                 return jsonify({"error": f"Invalid Home Type '{filters['home_type']}'."}), 400
             query['type'] = filters['home_type']
         
@@ -741,7 +752,7 @@ class PropertySearchFilterView(MethodView):
                     '$match': {
                         'latitude': {'$gte': min_lat, '$lte': max_lat},
                         'longitude': {'$gte': min_lng, '$lte': max_lng},
-                        'status': {'$ne': 'cancelled'}
+                        'status': {'$ne': 'Cancelled'}
                     }
                 }
             ]

@@ -122,7 +122,7 @@ class SaveUserMessageView(MethodView):
         mqtt_client.unsubscribe(mqtt_topic)
        
         log_action(user['uuid'], user['role'], "customer_service-send_message", chat_message)
-        return jsonify({"message": "Message received and published successfully"}), 200
+        return jsonify({"message": "Message received and published successfully"}), 201
 
 
 class CheckResponseView(MethodView):
@@ -316,7 +316,7 @@ class BuyerSellersChatView(MethodView):
         mqtt_client.unsubscribe(mqtt_topic)
         
         log_action(user['uuid'], user['role'], "buyer_seller_chat-send_message", chat_message)
-        return jsonify({'message': 'Message sent successfully'}), 200
+        return jsonify({'message': 'Message sent successfully'}), 201
 
 
 class BuyerSellerChatUsersListView(MethodView):
@@ -512,7 +512,7 @@ class UserCustomerServicePropertySendMesssageView(MethodView):
 
         log_action(user['uuid'], user['role'], "customer_service-property-chat", chat_message)
         mqtt_client.unsubscribe(mqtt_topic)
-        return jsonify({"message": "Message received and published successfully"}), 200
+        return jsonify({"message": "Message received and published successfully"}), 201
 
 
 class UserCustomerServicePropertyChatUserList(MethodView):

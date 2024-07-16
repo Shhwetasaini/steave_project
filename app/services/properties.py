@@ -367,3 +367,11 @@ def search_customer_service_mesage(query, user_uuid):
                 matched_columns = []
 
     return response
+
+def validate_property_type(property_type):
+    valid_types = ['Single Family', 'Multi Family', 'Condo', 'Townhouse', 'Single']
+    return property_type in valid_types
+
+def validate_property_status(property_status):
+    valid_statuses = ['For Sale', 'Pending', 'Sold']
+    return property_status in valid_statuses

@@ -207,7 +207,7 @@ class DownloadDocView(MethodView):
                upsert=True
             )
             log_action(user['uuid'], user['role'], "downloaded-document", document_data)
-            return jsonify({"message": "Document successfully added to user's documents"}), 201  # Created
+            return jsonify({"message": "Document successfully added to user's documents"}), 200  # Created
 
    
 class UploadDocView(MethodView):
@@ -255,7 +255,7 @@ class UploadDocView(MethodView):
             )
          
             log_action(user['uuid'], user['uuid'], "uploaded-document", document_data)
-            return jsonify({"message": "File successfully uploaded!", "uploaded-document": document_data}), 201  # Created
+            return jsonify({"message": "File successfully uploaded!", "uploaded-document": document_data}), 200  # Created
         else:
             return jsonify({"error": "File is missing or invalid filename."}), 400  # Bad Request
 

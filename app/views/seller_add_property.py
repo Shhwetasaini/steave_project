@@ -25,8 +25,11 @@ from app.services.properties import (
     get_client_ip,
     send_email,
     is_valid,
-    validate_address
+    validate_address,
+    validate_property_type,
+    validate_property_status
 )
+
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +60,8 @@ class PropertyTypeSelectionView(MethodView):
         data = request.json
         property_address = data.get('seller_address',None)
         property_type = data.get('property_type',None)
+        property_status = data.get('status', None)
+
 
         if not property_address or not property_type:
             return jsonify({"error":"seller_address and property_type field is required"}), 400
@@ -75,14 +80,25 @@ class PropertyTypeSelectionView(MethodView):
         valid_address = validate_address(property_address)
         if not valid_address:
             return jsonify({'error': "Invalid Address. missing country, state or postal_code"}), 400
+           
+        # Validate property_type
+        valid_property_type = validate_property_type(property_type)
+        if not valid_property_type:
+            return jsonify({'error': f"Invalid property_type. applicable types are: [Single, Condo, Townhouse, Single Family, Multi Family]"}), 400
         
+        # Validate property_status
+        if property_status is not None or property_status != '':
+            valid_status = validate_property_status(property_status)
+            if not valid_status:
+                return jsonify({'error': f"Invalid status. applicable status are: [For Sale, Pending, Sold, Cancelled]"}), 400
+            
         property_data = {
             'type': property_type,
             'address': property_address,
             'images': [],
             'panoramic_images': [],
             "name": data.get('name', None),
-            "status": data.get('status', None),
+            "status": property_status,
             "construction": data.get('construction', None),
             "state": data.get('state', None),
             "city": data.get('city', None),
@@ -135,7 +151,7 @@ class PropertyTypeSelectionView(MethodView):
         data['property_id'] = property_id
         data['transaction_id'] = transaction_id
         log_action(user['uuid'], user['role'], "selected-property_address and property_type", data)
-        return jsonify({'message':'data saved successfully.', 'transaction_id': transaction_id}), 200
+        return jsonify({'message':'data saved successfully.', 'transaction_id': transaction_id}), 201
 
 
 class PropertyUploadImageView(MethodView):
@@ -429,7 +445,7 @@ class CheckoutView(MethodView):
                 } 
                 log_action(user['uuid'],user['role'], "purchassed-property", payload)
                 logger.info("Email sent successfully.")
-                return jsonify({'message': 'Property purchase succesfull.'}), 200  # Specify the success URL
+                return jsonify({'message': 'Property purchase succesfull.'}), 201  # Specify the success URL
             else:
                 logger.error("Failed to send email.")
                 return jsonify({'error': 'Failed to send email.'}), 400
