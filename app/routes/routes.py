@@ -50,7 +50,7 @@ api_bp.add_url_rule(rule='user/properties/add/checkout', view_func=CheckoutView.
 
 api_bp.add_url_rule(rule='user/properties/list', view_func=SellerPropertyListView.as_view('user_properties_list'))   #individual seller properties
 api_bp.add_url_rule(rule='user/properties', view_func=AllPropertyListView.as_view('user_properties'))
-api_bp.add_url_rule(rule='user/properties/<string:property_id>', view_func=PropertyUpdateView.as_view('user_properties_update'))
+api_bp.add_url_rule(rule='user/properties/<string:property_id>', view_func=UserPropertyView.as_view('user_property_view_update'))
 api_bp.add_url_rule(rule='user/properties/image/remove', view_func=PropertyImageDeleteView.as_view('user_properties_image_remove'))
 api_bp.add_url_rule(rule='user/properties/image/label', view_func=PropertyImageLabelUpdateView.as_view('user_properties_image_label'))
 api_bp.add_url_rule(rule='user/properties/add/external', view_func=ExternalPropertyAddView.as_view('user_properties_add_external'))

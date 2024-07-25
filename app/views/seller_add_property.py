@@ -84,7 +84,7 @@ class PropertyTypeSelectionView(MethodView):
         # Validate property_type
         valid_property_type = validate_property_type(property_type)
         if not valid_property_type:
-            return jsonify({'error': f"Invalid property_type. applicable types are: [Condo, Townhouse, Single Family, Multifamily]"}), 400
+            return jsonify({'error': f"Invalid property_type. applicable types are: [Condo, Townhouse, Single_Family, Multifamily]"}), 400
         
         # Validate property_status
         if property_status is not None and property_status != '':
@@ -341,12 +341,12 @@ class SavePdfView(MethodView):
 
             document_data['transaction_id'] = transaction_id
             document_data['property_id'] =  transaction['property_data']['property_id']
-            document_data.pop('_id')
+            document_data.pop('_id', None)
             log_action(user['uuid'], user['role'], "signed-property_contract", document_data) 
             return jsonify({'message':'data saved successfully.'}), 200
         except Exception as e:
             print("Error during PDF generation:", str(e))
-            return jsonify({'error': str(e)}), 400
+            return jsonify({'error': str(e)}), 500
         finally:
             if template_pdf:
                 template_pdf.close()
@@ -437,8 +437,8 @@ class CheckoutView(MethodView):
             # Replace `send_email` with your actual email sending function
             status_code, headers = send_email(subject, message, recipient_email)
             if status_code == 202:
-                transaction.pop('_id')
-                lookup_data.pop('_id')
+                transaction.pop('_id', None)
+                lookup_data.pop('_id', None)
                 payload = {
                     'transaction':transaction,
                     'property_seller_transaction': lookup_data

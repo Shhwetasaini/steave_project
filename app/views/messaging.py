@@ -15,7 +15,8 @@ from app.services.properties import (
     get_receivers, 
     search_messages, 
     search_customer_property_mesage,
-    search_customer_service_mesage
+    search_customer_service_mesage,
+    send_notification
 )
 
 
@@ -314,7 +315,9 @@ class BuyerSellersChatView(MethodView):
         )
         
         mqtt_client.unsubscribe(mqtt_topic)
-        
+        notify = send_notification(receiver.get('device_token'))
+        if notify.get('error'):
+            return jsonify(notify), 500
         log_action(user['uuid'], user['role'], "buyer_seller_chat-send_message", chat_message)
         return jsonify({'message': 'Message sent successfully'}), 201
 

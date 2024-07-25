@@ -1,4 +1,5 @@
 asgiref
+firebase-admin 
 Flask
 Flask-Cors
 pymongo

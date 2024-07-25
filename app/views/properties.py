@@ -16,8 +16,10 @@ from pymongo import ReturnDocument
 
 from app.services.admin import log_request
 from app.services.authentication import custom_jwt_required, log_action
-from app.services.properties import validate_address, save_panoramic_image
-from app.services.properties import validate_property_status, validate_property_type
+from app.services.properties import (
+    validate_address, save_panoramic_image,
+    validate_property_status, validate_property_type
+)
 
 
 class SellerPropertyListView(MethodView):
@@ -93,6 +95,8 @@ class AllPropertyListView(MethodView):
             if lookup_info: 
                 if prop.get('status') == 'Cancelled':
                     continue
+                if lookup_info['seller_id'] == user['uuid']:
+                    continue
                 property_id = str(prop.pop('_id', None))
                 prop['property_id'] = property_id
                 seller = current_app.db.users.find_one({'uuid': lookup_info['seller_id']})
@@ -153,8 +157,31 @@ class ExternalPropertyAddView(MethodView):
             return jsonify({'error': str(e)}), 400
 
 
-class PropertyUpdateView(MethodView):
+class UserPropertyView(MethodView):
     decorators = [custom_jwt_required()]
+
+    def get(self, property_id):
+        log_request()
+        current_user = get_jwt_identity()
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        if user:
+            if user.get('role') == 'realtor':
+                return jsonify({'error': 'Unauthorized access'}), 401
+            property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
+            property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
+            if property_data is None or property_seller_data is None:
+                return jsonify({'error': 'Property does not exists or you are unauthorized to view this property'}), 401
+            property_id = str(property_data.pop('_id', None))
+            property_data['property_id'] = property_id
+            log_action(user['uuid'], user['role'], "view-single-property", {"property_id": property_id})
+            return jsonify(property_data), 200
+        else:
+            return jsonify({'error': 'User does not exist'}), 404
+    
     def put(self, property_id):
         log_request()
         current_user = get_jwt_identity()
@@ -169,7 +196,7 @@ class PropertyUpdateView(MethodView):
             property_data = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
             property_seller_data = current_app.db.property_seller_transaction.find_one({'property_id': property_id, 'seller_id': user['uuid']})
             if property_data is None or property_seller_data is None:
-                return jsonify({'error': 'Property does not Exists or you are not allowed to update this property'}), 401
+                return jsonify({'error': 'Property does not exists or you are not allowed to update this property'}), 401
             updatable_fields = [
                 'description', 'price', 'size',
                 'name', 'status','construction', 'address', 'state', 'city',
@@ -705,11 +732,15 @@ class PropertySearchFilterView(MethodView):
         properties_collection = current_app.db.properties
         filtered_properties = list(properties_collection.find(query))
 
+        valid_properties = []
         for property in filtered_properties:
-            property['_id'] = str(property['_id'])
+            property['property_id'] = str(property.pop('_id', None))
+            property_transaction = current_app.db.property_seller_transaction.find_one({"property_id": property['property_id']})
+            if property_transaction and property_transaction['seller_id'] != user['uuid']:
+                valid_properties.append(property)
 
         log_action(user['uuid'], user['role'], "filtered-properties", {'filters': filters})
-        return jsonify(filtered_properties), 200
+        return jsonify(valid_properties), 200
     
     def post(self):
         log_request()
@@ -764,7 +795,7 @@ class PropertySearchFilterView(MethodView):
             for property in filtered_properties:
                 property['_id'] = str(property.pop('_id'))
                 valid_property = current_app.db.property_seller_transaction.find_one({"property_id": property["_id"]})
-                if valid_property:
+                if valid_property and valid_property['seller_id'] != user['uuid']:
                     all_valid_properties.append(property)
 
         log_action(user['uuid'], user['role'], "searched-properties", {'payload_data': data})
@@ -819,7 +850,7 @@ class FavoritePropertyView(MethodView):
         try:
             property_object_id = ObjectId(property_id)
             property = current_app.db.properties.find_one({"_id": property_object_id})
-            property_transaction = current_app.db.property_seller_transaction.find_one({"property_id": property_id, "seller_id": user["uuid"]})
+            property_transaction = current_app.db.property_seller_transaction.find_one({"property_id": property_id})
             if not property or not property_transaction:
                 return jsonify({'error': 'Property does not exist or invalid property_id'}), 404
 
@@ -860,7 +891,7 @@ class FavoritePropertyView(MethodView):
         try:
             property_object_id = ObjectId(property_id)
             property = current_app.db.properties.find_one({"_id": property_object_id})
-            property_transaction = current_app.db.property_seller_transaction.find_one({"property_id": property_id, "seller_id": user["uuid"]})
+            property_transaction = current_app.db.property_seller_transaction.find_one({"property_id": property_id})
             if not property or not property_transaction:
                 return jsonify({'error': 'Property does not exist or invalid property_id'}), 404
 

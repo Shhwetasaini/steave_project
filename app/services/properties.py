@@ -4,6 +4,8 @@ import uuid
 import logging
 from datetime import datetime
 
+import firebase_admin
+from firebase_admin import credentials, messaging
 from bson import ObjectId
 from flask import current_app, request, url_for
 from werkzeug.utils import secure_filename  
@@ -17,6 +19,13 @@ logger = logging.getLogger(__name__)
 
 def create_property(property_data):
     try: 
+        google_location_api_key = current_app.config['GOOGLE_LOCATION_API_KEY']
+        geocoder = GoogleV3(api_key=google_location_api_key)  
+        location = geocoder.geocode(property_data['address'])
+        if location:
+            property_data['latitude'] = location.latitude
+            property_data['longitude'] = location.longitude
+            
         result = current_app.db.properties.insert_one(property_data)
         property_id = result.inserted_id
         logger.info("Property created successfully.")
@@ -369,9 +378,34 @@ def search_customer_service_mesage(query, user_uuid):
     return response
 
 def validate_property_type(property_type):
-    valid_types = ['Single Family', 'Multifamily', 'Condo', 'Townhouse']
+    valid_types = ['Single_Family', 'Multifamily', 'Condo', 'Townhouse']
     return property_type in valid_types
+
 
 def validate_property_status(property_status):
     valid_statuses = ['For Sale', 'Pending', 'Sold']
     return property_status in valid_statuses
+
+
+def send_notification(device_token):
+    try:
+        # Path to your Firebase Admin SDK credentials
+        cred = credentials.Certificate('/home/local/API/airebroker-firebase-adminsdk-er6ol-27eb6bb50a.json')
+        firebase_admin.initialize_app(cred)
+
+        message_body = "New message Received"
+
+        # Construct the message
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title='Notification',
+                body=message_body,
+            ),
+            token=device_token,
+        )
+
+        # Send the notification message
+        response = messaging.send(message)
+        return {"success": "Notification sent", "response": response}
+    except Exception as e:
+        return {"error": str(e)}

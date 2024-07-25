@@ -12,6 +12,7 @@ import werkzeug
 
 from app.services.authentication import custom_jwt_required, log_action
 from app.services.admin import log_request
+from app.services.properties import send_notification
 
 
 class UserCustomerChatUsersListView(MethodView):
@@ -21,7 +22,7 @@ class UserCustomerChatUsersListView(MethodView):
         log_request()
         current_user = get_jwt_identity()
         user = current_app.db.users.find_one({'email': current_user})
-      
+
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
@@ -146,6 +147,9 @@ class SaveAdminResponseView(MethodView):
         )
 
         mqtt_client.unsubscribe(mqtt_topic)
+        notify = send_notification(user.get('device_token'))
+        if notify.get('error'):
+            return jsonify(notify), 500
         
         log_action(logged_in_user['uuid'],logged_in_user['role'], "responded-chat", chat_message)
         return jsonify({"message": "Response received and published successfully"}), 200

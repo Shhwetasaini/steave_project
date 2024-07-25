@@ -81,7 +81,8 @@ class RegisterUserView(MethodView):
             'profile_pic': None,
             'password': hashlib.sha256(password.encode("utf-8")).hexdigest(),
             'is_verified': False,
-            'liked_properties': []
+            'liked_properties': [],
+            'device_token': None
         }
 
         query = {"$or": [{"uuid": uuid_val}, {"email": email}]}
@@ -283,7 +284,10 @@ class UpdateUsersView(MethodView):
         last_name = data.get('last_name')
         phone = data.get('phone')
         password = data.get('password')
+        device_token = data.get('devicetoken')
         liked_properties = data.get('liked_properties')
+        if device_token:
+            update_doc['device_token'] = device_token.strip()
         if first_name and first_name.strip() != '':
             update_doc['first_name'] = first_name.strip()
         if last_name and last_name.strip() != '':
