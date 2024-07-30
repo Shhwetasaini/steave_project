@@ -183,8 +183,9 @@ def get_receivers(user_role_key, user_uuid, query=None):
     
     for receiver in receivers:
         other_user = current_app.db.users.find_one({'uuid': receiver['other_user_id']}, {'email': 1, 'first_name': 1, 'last_name': 1, 'profile_pic': 1, '_id': 0})
-        property_address = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, '_id': 0})
-        receiver['property_address'] = property_address['address'] if property_address else None
+        property_details = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, 'images': 1,  '_id': 0})
+        receiver['property_address'] = property_details['address'] if property_details else None
+        receiver['property_images'] = property_details['images'] if property_details else None
         receiver['email'] = other_user.get('email') if other_user else None
         receiver['first_name'] = other_user.get('first_name') if other_user else None
         receiver['last_name'] = other_user.get('last_name') if other_user else None

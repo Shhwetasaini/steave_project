@@ -208,7 +208,7 @@ class UserPropertyView(MethodView):
 
             data = request.form 
             files = request.files.get('image')
-            label = data.get('label')
+            label = data.get('label', '')
             
             if not data and not files:
                 return jsonify({'error': 'No data in payload'}),204
@@ -275,9 +275,6 @@ class UserPropertyView(MethodView):
             current_app.db.properties.update_one({'_id': ObjectId(property_id)}, {'$set': update_data})
             # Add image if provided
             if 'image' in request.files:
-                if not label:
-                    return jsonify({'error': 'Missing image label'}), 400
-
                 file = request.files['image']
                 org_filename = secure_filename(file.filename)
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -294,7 +291,8 @@ class UserPropertyView(MethodView):
                 image_path = os.path.join(user_media_dir, filename)
                 file.save(image_path)
                 image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), filename))
-                image_data = {'label':label, 'name': filename, 'image_url':image_url}
+                image_data = {'lable':label, 'name': filename, 'image_url': image_url}
+                
                 update_data.setdefault('images', []).append(image_data)
                 current_app.db.properties.update_one(
                     {'_id': ObjectId(property_id)},

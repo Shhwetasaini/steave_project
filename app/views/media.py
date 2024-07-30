@@ -258,6 +258,50 @@ class UploadDocView(MethodView):
             return jsonify({"message": "File successfully uploaded!", "uploaded-document": document_data}), 200  # Created
         else:
             return jsonify({"error": "File is missing or invalid filename."}), 400  # Bad Request
+    
+    
+    def delete(self):
+        log_request()
+        current_user = get_jwt_identity()
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Check if file URL is provided
+        file_url = request.form.get('file_url')
+        if not file_url:
+            return jsonify({'error': 'File URL is missing!'}), 400
+
+        # Extract the filename from the URL
+        file_name = os.path.basename(file_url)
+
+        # Construct the file path
+        user_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid']), 'uploaded_docs')
+        file_path = os.path.join(user_docs_dir, file_name)
+
+        # Delete the file from the server
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        else:
+            return jsonify({'error': 'File not found on the server!'}), 404
+
+        # Update the uploaded_documents collection in the database
+        result = current_app.db.users_uploaded_docs.update_one(
+            {'uuid': user['uuid']},
+            {'$pull': {'uploaded_documents': {'url': file_url}}},
+            upsert=True
+        )
+
+        if result.modified_count == 0 and result.upserted_id is None:
+            return jsonify({'error': 'Failed to update uploaded_documents collection'}), 500
+
+        log_action(user['uuid'], user['role'], "deleted-user-document", {'file': file_url})
+        return jsonify({'message': 'Document deleted successfully'}), 200
 
 
 class AllDocsView(MethodView):
