@@ -1,6 +1,7 @@
 import os
 import json
 import datetime
+import logging
 from flask_cors import CORS
 
 from flask import Flask
@@ -19,20 +20,29 @@ mqtt_client.username_pw_set(Config.MQTT_USERNAME, Config.MQTT_PASSWD)
 
 def create_app(config_name):   
     app = Flask(__name__,)
-    CORS(app)
+    CORS(app, supports_credentials=True)
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
 
     jwt.init_app(app)
-    
-    # Connect to mongoDB
-    mongo_client = MongoClient(
-        app.config['DB_HOST'], 
-        app.config['DB_PORT'], 
-        username=app.config['DB_USER'], 
-        password=app.config['DB_PASSWD']
-    )
-    app.db = mongo_client.get_database(app.config['DB_NAME'])
+    app.logger.setLevel(logging.INFO) 
+
+    # Set the logging level for PyMongo to ERROR
+    logging.getLogger('pymongo').setLevel(logging.ERROR)
+
+    try:
+        # Connect to MongoDB
+        mongo_client = MongoClient(
+            app.config['DB_HOST'], 
+            app.config['DB_PORT'], 
+            username=app.config['DB_USER'], 
+            password=app.config['DB_PASSWD']
+        )
+        # Get the database
+        app.db = mongo_client.get_database(app.config['DB_NAME'])
+    except Exception as e:
+        # Log the error
+        app.logger.error(f"Failed to connect to MongoDB: {e}")
 
     jwt.token_in_blocklist_loader(check_if_token_revoked)
 
@@ -78,65 +88,37 @@ def create_app(config_name):
             except Exception as e:
                 print("Error in saving buyer_seller_message:", str(e))
                 
-        
-        elif payload.get('key')== 'seller_property_messaging':
+        elif payload.get('key')== 'user-customer_service-property-chat':
             try:
                 payload.pop('key')
                 payload['message_content'][0]['timestamp'] = datetime.datetime.now()
-                # Extract sender_id and buyer_id from payload
-                buyer_id = payload.get('buyer_id')
-                seller_id = payload.get('seller_id')
-                property_id = payload.get('property_id')
-
-                # Check if a document already exists with the given sender_id and buyer_id
-                existing_message = app.db.seller_property_messaging.find_one({
-                    'buyer_id': buyer_id,
-                    'seller_id': seller_id,
-                    'property_id': property_id
+                existing_document = app.db.users_customer_service_property_chat.find_one({
+                    'user_id': payload['user_id'], 
+                    'property_id':  payload['property_id']
                 })
-
-                if existing_message:
-                    # If a document already exists, update it by pushing the new message content
-                    app.db.seller_property_messaging.update_one(
-                        {'_id': existing_message['_id']},
-                        {'$push': {'message_content': payload['message_content'][0]}}
-                    )
+                if existing_document:
+                    app.db.users_customer_service_property_chat.update_one(
+                        {'_id': existing_document['_id']}, 
+                        {'$push': {'message_content': payload['message_content'][0]}
+                    })
                 else:
-                    # If no document exists, insert a new one
-                    app.db.seller_property_messaging.insert_one(payload)
+                    app.db.users_customer_service_property_chat.insert_one(payload)
             except Exception as e:
-                print("Error in saving seller_buyer_property_message:", str(e))
-
-        
+                print("Error in saving user message:", str(e))
+           
         else:
             try:
-                payload['timestamp'] = datetime.datetime.now()
-                if payload.get('is_response')  == True:
-                    notification = {
-                        "title": "Admin Response", 
-                        "message": "recived message from admin" , 
-                        "timestamp": datetime.datetime.now(), 
-                        'type':"chat"
-                    }
-                    if app.db.notifications.find_one({'user_id':payload['user_id']}):
-                        app.db.notifications.update_one(
-                            {'user_id': payload["user_id"]},
-                            {"$push": {"notifications": notification}}
-                        )
-                    else:
-                        app.db.notifications.insert_one({
-                            'user_id': payload["user_id"],
-                            "notifications": [notification]
-                        })
-                message_data = payload.copy()
-                message_data.pop('user_id')      
-
+                payload['message_content'][0]['timestamp'] = datetime.datetime.now()
+             
                 existing_document = app.db.messages.find_one({'user_id': payload['user_id']})
 
                 if existing_document:
-                    app.db.messages.update_one({'user_id': payload['user_id']}, {'$push': {'messages': message_data}})
+                    app.db.messages.update_one({'user_id': payload['user_id']}, {'$push': {'messages': payload['message_content'][0]}})
                 else:
-                    app.db.messages.insert_one({'user_id': payload['user_id'], 'messages': [message_data]})
+                    messages = payload['message_content']
+                    payload.pop('message_content')
+                    payload['messages'] = messages
+                    app.db.messages.insert_one(payload)
             except Exception as e:
                 print("Error in saving user message:", str(e))
 
@@ -160,8 +142,3 @@ def create_app(config_name):
     app.register_blueprint(api_bp)
 
     return app
-
-
-config_name = os.getenv('CONFIG', 'development')
-
-app = create_app(config_name)

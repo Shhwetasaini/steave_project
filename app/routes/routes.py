@@ -1,15 +1,13 @@
 from flask import Blueprint
 from app.views.authentication import *
 from app.views.messaging import *
-from app.views.notifications import *
 from app.views.seller_add_property import *
 from app.views.media import *
 from app.views.properties import *
 from app.views.admin.documents import *
 from app.views.admin.messaging import *
-from app.views.admin.users  import *
-from app.views.buyers.users import *
-from app.views.buyers.properties import *
+from app.views.admin.users import *
+from app.views.admin.context_processors import *
 
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -24,7 +22,7 @@ api_bp.add_url_rule(rule='/user/logout', view_func=LogoutUserView.as_view('logou
 api_bp.add_url_rule(rule='/user/update', view_func=UpdateUsersView.as_view('update_user'))
 api_bp.add_url_rule(rule='/user/forgot-passwd', view_func=ForgetPasswdView.as_view('forgot_passwd'))
 api_bp.add_url_rule(rule='/user/reset-passwd', view_func=ResetPasswdView.as_view('reset_passwd'))
-api_bp.add_url_rule(rule='/user/notifications', view_func=NotificationView.as_view('user_notifications'))
+
 api_bp.add_url_rule(rule='/user/check_response', view_func=CheckResponseView.as_view('check_response'))
 api_bp.add_url_rule(rule='/user/send-message', view_func=SaveUserMessageView.as_view('send_message'))
 
@@ -37,41 +35,51 @@ api_bp.add_url_rule(rule='user/uploaded-documents', view_func=UserUploadedDocsVi
 api_bp.add_url_rule(rule='/user/media', view_func=SendMediaView.as_view('users_media'))
 api_bp.add_url_rule(rule='/user/media/delete', view_func=DeleteMediaView.as_view('users_media_delete'))
 api_bp.add_url_rule(rule='/docs', view_func=AllDocsView.as_view('docs'))
+api_bp.add_url_rule(rule='/docs/filter', view_func=DocumentFilterView.as_view('docs_filter'))
+api_bp.add_url_rule(rule='/user/docs/date', view_func=UserDocsDateRangeView.as_view('user_docs_date_range'))
+api_bp.add_url_rule(rule='/docs/fill-request/<string:document_id>', view_func=DocumentFillRequestView.as_view('docs_fill_request'))
+api_bp.add_url_rule(rule='/docs/<string:document_id>', view_func=DocAnswerInsertionView.as_view('docs_answer'))
+api_bp.add_url_rule(rule='/docs/prefill-answers', view_func=DocumentPrefillAnswerView.as_view('docs_prefill_answers'))
+
+
 
 #Properties
-#api_bp.add_url_rule(rule='/sellers/properties', view_func=SellersDummyPropertyListView.as_view('sellers_properties_list'))    #properties for sellers to select/purchase
-#api_bp.add_url_rule(rule='/properties/seller/add', view_func=MobileAppSellersDummyPropertyAddView.as_view('mobile_properties_add'))  #separate for mobile sellers for now
-
-#api_bp.add_url_rule(rule='user/properties/add', view_func=SellersPropertyAddView.as_view('user_properties_add'))
 api_bp.add_url_rule(rule='user/properties/add/property-type-selection', view_func=PropertyTypeSelectionView.as_view('property_type_selection'))
-api_bp.add_url_rule(rule='user/properties/add/infos', view_func=InfosView.as_view('property_infos'))
+api_bp.add_url_rule(rule='user/properties/add/upload-image', view_func=PropertyUploadImageView.as_view('property_images'))
 api_bp.add_url_rule(rule='user/properties/add/save-pdf', view_func=SavePdfView.as_view('save_pdf'))
 api_bp.add_url_rule(rule='user/properties/add/checkout', view_func=CheckoutView.as_view('property_checkout'))
 
 api_bp.add_url_rule(rule='user/properties/list', view_func=SellerPropertyListView.as_view('user_properties_list'))   #individual seller properties
-api_bp.add_url_rule(rule='user/properties/buyers', view_func=SellerBuyersListView.as_view('user_properties_buyers'))
-api_bp.add_url_rule(rule='user/properties/buyers/<string:property_id>', view_func=SellerSinglePropertyBuyersListView.as_view('user_singleproperty_buyers'))
-api_bp.add_url_rule(rule='user/properties/<string:property_id>', view_func=PropertyUpdateView.as_view('user_properties_update'))
-api_bp.add_url_rule(rule='user/properties/image/add', view_func=PropertyImageAddView.as_view('user_properties_image_add'))
+api_bp.add_url_rule(rule='user/properties', view_func=AllPropertyListView.as_view('user_properties'))
+api_bp.add_url_rule(rule='user/properties/<string:property_id>', view_func=UserPropertyView.as_view('user_property_view_update'))
 api_bp.add_url_rule(rule='user/properties/image/remove', view_func=PropertyImageDeleteView.as_view('user_properties_image_remove'))
-
-#buyers property chat with sellers 
-api_bp.add_url_rule(rule='user/properties/chat', view_func=SellerPropertyChatView.as_view('user_properties_chat'), methods=['POST'])
-api_bp.add_url_rule(rule='user/properties/chat/<property_id>/<user_id>', view_func=SellerPropertyChatView.as_view('user_property_message'), methods=['GET'])
-
-
+api_bp.add_url_rule(rule='user/properties/image/label', view_func=PropertyImageLabelUpdateView.as_view('user_properties_image_label'))
+api_bp.add_url_rule(rule='user/properties/add/external', view_func=ExternalPropertyAddView.as_view('user_properties_add_external'))
+api_bp.add_url_rule(rule='user/properties/panoramic_images', view_func=PanoramicImageView.as_view('user_properties_add_panoramic_images'))
+api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>', view_func=PanoramicImageView.as_view('user_properties_get_panoramic_images'))
+api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>/<int:property_version>/<int:order>', view_func=PanoramicImageView.as_view('user_properties_delete_panoramic_images'))
+api_bp.add_url_rule(rule='user/properties/search', view_func=PropertySearchFilterView.as_view('user_property_search'))
+api_bp.add_url_rule(rule='user/properties/mobile_search', view_func=PropertySearchFilterMobileView.as_view('user_property_mobile_search'))
+api_bp.add_url_rule(rule='user/properties/favorite', view_func=FavoritePropertyView.as_view('user_property_favorite'))
 
 # Admin UI APIs
+api_bp.add_url_rule(rule='/admin/context-processor', view_func=ContextProcessorsDataView.as_view('admin_context_processor'))
+api_bp.add_url_rule(rule='/admin/check-token', view_func=TokenCheckView.as_view('admin_check_token'))
+api_bp.add_url_rule(rule='/admin/dashboard', view_func=DashboardView.as_view('admin_dashboard'))
 api_bp.add_url_rule(rule='/admin/users', view_func=AllUserView.as_view('users'))
-api_bp.add_url_rule(rule='/admin/user/register', view_func=AddUserView.as_view('admin_user_register'))
+api_bp.add_url_rule(rule='/admin/user/register', view_func=AdminRegisterUserView.as_view('admin_user_register'))
+api_bp.add_url_rule(rule='/admin/user/add', view_func=AddUserView.as_view('admin_user_add'))
+api_bp.add_url_rule(rule='/admin/user/login', view_func=AdminUserLoginView.as_view('admin_user_login'))
 api_bp.add_url_rule(rule='/admin/user/update', view_func=EditUsersView.as_view('admin_user_update'))
 api_bp.add_url_rule(rule='/admin/user/delete', view_func=DeleteUserView.as_view('admin_user_delete'))
 api_bp.add_url_rule(rule='/admin/user/media', view_func=GetMediaView.as_view('admin_user_media'))
 api_bp.add_url_rule(rule='/admin/user/downloded-docs/<uuid>', view_func=DownloadedDocsView.as_view('admin_user_downloaded_docs'))
 api_bp.add_url_rule(rule='/admin/user/uploaded-docs/<uuid>', view_func=UploadedDocsView.as_view('admin_user_uploaded_docs'))
-api_bp.add_url_rule(rule='/admin/user/chats', view_func=ChatView.as_view('admin_user_chats'))
-api_bp.add_url_rule(rule='/admin/user/chat-status', view_func=UpdateChatStatus.as_view('admin_user_chat_status'))
-api_bp.add_url_rule(rule='/admin/response', view_func=SaveAdminResponseView.as_view('admin_response'))
+api_bp.add_url_rule(rule='/admin/user/chats', view_func=UserCustomerChatUsersListView.as_view('admin_user_chats'))
+api_bp.add_url_rule(rule='/admin/response', view_func=SaveAdminResponseView.as_view('admin_response'), methods=['POST'])
+api_bp.add_url_rule(rule='/admin/response/<user_id>', view_func=SaveAdminResponseView.as_view('admin_response_messages'), methods=['GET'])
+api_bp.add_url_rule(rule='/admin/property/response', view_func=SavePropertyAdminResponseView.as_view('admin_property_resoponse'), methods=['POST'])
+api_bp.add_url_rule(rule='/admin/property/response/<property_id>/<user_id>', view_func=SavePropertyAdminResponseView.as_view('admin_property_messages'), methods=['GET'])
 api_bp.add_url_rule(rule='/admin/documents', view_func=AllDocumentsView.as_view('admin_documents'))
 api_bp.add_url_rule(rule='/admin/flforms', view_func=FlFormsView.as_view('admin_flforms'))
 api_bp.add_url_rule(rule='/admin/mnforms', view_func=MnFormsView.as_view('admin_mnforms'))
@@ -81,13 +89,17 @@ api_bp.add_url_rule(rule='/admin/document/update', view_func=EditDocumentsView.a
 api_bp.add_url_rule(rule='/admin/document/upload', view_func=UploadDocumentView.as_view('admin_document_upload'))
 api_bp.add_url_rule(rule='/admin/document/flforms/move', view_func=MoveFlFormsFileView.as_view('admin_document_flforms_move'))
 api_bp.add_url_rule(rule='/admin/document/mnforms/move', view_func=MoveMnFormsFileView.as_view('admin_document_mnforms_move'))
+api_bp.add_url_rule(rule='/admin/user/actions', view_func=ActionLogsView.as_view('admin_user_action'))
+api_bp.add_url_rule(rule='/admin/user/property/chat/list', view_func=UserCustomerPropertyChatUsersListView.as_view('admin_user_property_chat_list'))
+api_bp.add_url_rule(rule='/admin/forms/question', view_func=SingleFormQuestionView.as_view('admin_forms_question'))
 
-
-#  Buyers APIs
-api_bp.add_url_rule(rule='/users/buyers', view_func=AllBuyersView.as_view('buyers'))
-api_bp.add_url_rule(rule='/users/buyers/add', view_func=AddBuyerView.as_view('add_buyers'))
-api_bp.add_url_rule(rule='/users/buyers/properties', view_func=BuyersPropertyListView.as_view('buyers_properties_list'))
-api_bp.add_url_rule(rule='/users/buyer/sellers', view_func=BuyerAllSellersView.as_view('buyer_sellers'))
+# Buyers APIs
 api_bp.add_url_rule(rule='/users/buyer/sellers/chat', view_func=BuyerSellersChatView.as_view('buyer_sellers_chat'), methods=['POST'])
 api_bp.add_url_rule(rule='/users/buyer/sellers/chat/<property_id>/<user_id>', view_func=BuyerSellersChatView.as_view('buyer_seller_message'), methods=['GET'])
-api_bp.add_url_rule(rule='/users/chat/list', view_func=ChatUsersListView.as_view('chat_users_list'))
+api_bp.add_url_rule(rule='/users/chat/list', view_func=BuyerSellerChatUsersListView.as_view('buyer_seller_chat_users_list'))
+api_bp.add_url_rule(rule='/users/buyer/seller/chat/search', view_func=BuyerSellerChatSearchView.as_view('buyer_sellers_chat_search'))
+
+#User-Customer-service property chat apis
+api_bp.add_url_rule(rule='/users/customer/property/chat', view_func=UserCustomerServicePropertySendMesssageView.as_view('user-customer-service_chat'), methods=['POST'])
+api_bp.add_url_rule(rule='/users/customer/property/chat/<property_id>', view_func=UserCustomerServicePropertySendMesssageView.as_view('user-customer-service_message'), methods=['GET'])
+api_bp.add_url_rule(rule='/users/customer/property/chat/list', view_func=UserCustomerServicePropertyChatUserList.as_view('user_customer_property_chat_list'))

@@ -1,5 +1,5 @@
 ## App run command
--- flask run --host <host> --port <port>
+-- uvicorn asgi:asgi_app --host 0.0.0.0 --port <port>
 ## Database
 --MongoDB
 --db_name =  API

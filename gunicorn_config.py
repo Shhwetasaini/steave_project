@@ -1,7 +1,7 @@
 # Example Gunicorn configuration file
 
 # The address and port to bind to
-bind = '0.0.0.0:5099'
+bind = '0.0.0.0:5090'
 
 # The number of worker processes for handling requests
 workers = 4

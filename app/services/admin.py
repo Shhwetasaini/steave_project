@@ -7,13 +7,15 @@ from app.services.media import document_exists, extract_first_page_as_image, res
 
 logging.basicConfig(level=logging.DEBUG)
 
-def log_request(req: request):
-    logging.info(f"Request Method: {req.method}")
-    logging.info(f"Request URL: {req.url}")
-    logging.info(f"Request Headers: {req.headers}")
-    if req.method == 'POST':
-        logging.info("Request Form Data: {}".format(req.form if req.form else req.json))
-
+def log_request():
+    logging.info(f"Request Method: {request.method}")
+    logging.info(f"Request URL: {request.url}")
+    logging.info(f"Request Headers: {request.headers}")
+    if request.method == 'POST':
+        if request.headers['Content-Type'] == 'application/json':
+            logging.info("Request JSON Data: {}".format(request.json))
+        else:
+            logging.info("Request Form Data: {}".format(request.form if request.form else "No form data"))
 
 def get_folders_and_files(root_dir):
     def get_files_in_folder(folder_path):
@@ -86,7 +88,8 @@ def update_files_in_documents_db():
                                         'added_at': datetime.now(),
                                         'preview_image': preview_page_url,
                                         'description': "",
+                                        'folder': folder,
                                         'type': forms_type
                                     }
                                     current_app.db.documents.insert_one(document_data)
-
+                                    return document_data
