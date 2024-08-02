@@ -35,6 +35,7 @@ api_bp.add_url_rule(rule='user/uploaded-documents', view_func=UserUploadedDocsVi
 api_bp.add_url_rule(rule='/user/media', view_func=SendMediaView.as_view('users_media'))
 api_bp.add_url_rule(rule='/user/media/delete', view_func=DeleteMediaView.as_view('users_media_delete'))
 api_bp.add_url_rule(rule='/docs', view_func=AllDocsView.as_view('docs'))
+api_bp.add_url_rule(rule='/docs/filter', view_func=DocumentFilterView.as_view('docs_filter'))
 api_bp.add_url_rule(rule='/user/docs/date', view_func=UserDocsDateRangeView.as_view('user_docs_date_range'))
 api_bp.add_url_rule(rule='/docs/fill-request/<string:document_id>', view_func=DocumentFillRequestView.as_view('docs_fill_request'))
 api_bp.add_url_rule(rule='/docs/<string:document_id>', view_func=DocAnswerInsertionView.as_view('docs_answer'))
@@ -58,6 +59,7 @@ api_bp.add_url_rule(rule='user/properties/panoramic_images', view_func=Panoramic
 api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>', view_func=PanoramicImageView.as_view('user_properties_get_panoramic_images'))
 api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>/<int:property_version>/<int:order>', view_func=PanoramicImageView.as_view('user_properties_delete_panoramic_images'))
 api_bp.add_url_rule(rule='user/properties/search', view_func=PropertySearchFilterView.as_view('user_property_search'))
+api_bp.add_url_rule(rule='user/properties/mobile_search', view_func=PropertySearchFilterMobileView.as_view('user_property_mobile_search'))
 api_bp.add_url_rule(rule='user/properties/favorite', view_func=FavoritePropertyView.as_view('user_property_favorite'))
 
 # Admin UI APIs

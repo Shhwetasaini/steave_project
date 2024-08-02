@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import werkzeug
 from bson import ObjectId
 import requests
@@ -322,11 +322,16 @@ class AllDocsView(MethodView):
         flforms_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'FL_Forms')
         mnforms_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms')
 
+        folders_set = set()
+        types_set = set()
+
         for forms_dir in [flforms_docs_dir, mnforms_docs_dir]:
             forms_type = "FL_Forms" if forms_dir == flforms_docs_dir else "MN_Forms"
+            types_set.add(forms_type)
             for folder in os.listdir(forms_dir):
                 folder_path = os.path.join(forms_dir, folder)
                 if os.path.isdir(folder_path):
+                    folders_set.add(folder)
                     for file in os.listdir(folder_path):
                         if file.endswith('.pdf'):
                             doc_name = file
@@ -337,7 +342,7 @@ class AllDocsView(MethodView):
                             if not document_exists(doc_name):
                                 image_name = extract_first_page_as_image(os.path.join(folder_path, file))
                                 if image_name:
-                                    # Check if preview image already exists in MongoDB and fo   lder
+                                    # Check if preview image already exists in MongoDB and folder
                                     if not resource_exists(preview_page_url, doc_url):
                                         # Store data in MongoDB
                                         document_data = {
@@ -359,7 +364,14 @@ class AllDocsView(MethodView):
             formatted_documents.append(doc)
 
         log_action(user['uuid'], user['role'], "viewed-all-documents", {})
-        return jsonify(formatted_documents), 200
+        
+        response = {
+            'documents': formatted_documents,
+            'folders': list(folders_set),
+            'types': list(types_set)
+        }
+
+        return jsonify(response), 200
 
 
 class UserDownloadedDocsView(MethodView):
@@ -407,6 +419,76 @@ class UserUploadedDocsView(MethodView):
         else:
             return jsonify({'error': 'User not found'}), 404  #Not found
 
+
+class DocumentFilterView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def get(self):
+        try:
+            log_request()
+            current_user = get_jwt_identity()
+            
+            # Validate the current user
+            try:
+                validate_email(current_user)
+                user = current_app.db.users.find_one({'email': current_user})
+            except EmailNotValidError:
+                user = current_app.db.users.find_one({'uuid': current_user})
+
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+
+            # Validate and parse query parameters
+            doc_type = request.args.get('type')
+            folder = request.args.get('folder')
+            recently_used = request.args.get('recently_used')
+
+            # Validate 'recently_used' parameter
+            if recently_used not in [None, 'true', 'false']:
+                return jsonify({'error': 'Invalid value for recently_used parameter. Expected "true" or "false".'}), 400
+
+            recently_used = recently_used == 'true'
+
+            # Build query based on validated parameters
+            query = {}
+            if doc_type:
+                query['type'] = doc_type
+            if folder:
+                query['folder'] = folder
+            if recently_used:
+                try:
+                    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+                    query['added_at'] = {"$gte": thirty_days_ago}
+                except Exception as e:
+                    return jsonify({'error': 'Error calculating date for recently used filter.'}), 400
+
+            # Ensure the query is properly constructed
+            if not query:
+                return jsonify({'error': 'At least one filter parameter is required.'}), 400
+
+            # Aggregate pipeline
+            pipeline = [
+                {"$match": query}
+            ]
+
+            # Fetch documents
+            documents = list(current_app.db.documents.aggregate(pipeline))
+
+            for doc in documents:
+                doc['_id'] = str(doc['_id'])
+
+            log_data = {
+                'type': doc_type,
+                'folder': folder,
+                'recently_used': recently_used
+            }
+            log_action(user['uuid'], user['role'], "filtered-documents", log_data)
+            
+            return jsonify(documents)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+        
 
 class UserDocsDateRangeView(MethodView):
     decorators = [custom_jwt_required()]

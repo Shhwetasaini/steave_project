@@ -724,7 +724,7 @@ class PropertySearchFilterView(MethodView):
         if 'home_type' in filters:
             valid_home_types = validate_property_type(filters['home_type'])
             if not valid_home_types:
-                return jsonify({"error": f"Invalid Home Type, valid home types : [Condo, Townhouse, Single Family, Multifamily]"}), 400
+                return jsonify({"error": f"Invalid Home Type, valid home types : ['Single_Family', 'Multifamily', 'Condo', 'Townhouse']"}), 400
             query['type'] = filters['home_type']
         
         properties_collection = current_app.db.properties
@@ -799,6 +799,91 @@ class PropertySearchFilterView(MethodView):
         log_action(user['uuid'], user['role'], "searched-properties", {'payload_data': data})
         return jsonify(all_valid_properties), 200
     
+
+class PropertySearchFilterMobileView(MethodView):
+    decorators = [custom_jwt_required()]
+    
+    def get(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        filters = request.args.to_dict()
+        query = {'status': {'$ne': 'Cancelled'}}
+
+        # Price Range Filters
+        if filters.get('min_price'):
+            try:
+                min_price = float(filters['min_price'])
+                if min_price < 0:
+                    return jsonify({"error": "min_price cannot be negative"}), 400
+                query['price'] = {'$gte': min_price}
+            except ValueError:
+                return jsonify({"error": "min_price must be a valid number"}), 400
+
+        if filters.get('max_price'):
+            try:
+                max_price = float(filters['max_price'])
+                if max_price < 0:
+                    return jsonify({"error": "max_price cannot be negative"}), 400
+                if 'price' in query:
+                    query['price'].update({'$lte': max_price})
+                else:
+                    query['price'] = {'$lte': max_price}
+            except ValueError:
+                return jsonify({"error": "max_price must be a valid number"}), 400
+
+            if filters.get('min_price') and min_price >= max_price:
+                return jsonify({"error": "min_price must be less than max_price"}), 400
+
+        if 'beds' in filters:
+            try:
+                beds = int(filters['beds'])
+                if beds < 0:
+                    return jsonify({"error": "Number of beds cannot be negative"}), 400
+                query['beds'] = {'$gt': beds}
+            except ValueError:
+                return jsonify({"error": "beds must be a valid integer"}), 400
+
+        # Baths Filter
+        if 'baths' in filters:
+            try:
+                baths = int(filters['baths'])
+                if baths < 0:
+                    return jsonify({"error": "Number of baths cannot be negative"}), 400
+                query['baths'] = {'$gt': baths}
+            except ValueError:
+                return jsonify({"error": "baths must be a valid integer"}), 400
+
+        # Home Type Filter
+        if 'home_type' in filters:
+            home_types = filters['home_type'].split(',')
+            valid_home_types = ['Single_Family', 'Multifamily', 'Condo', 'Townhouse']
+            if not set(home_types).issubset(valid_home_types):
+                return jsonify({"error": "Invalid Home Type, valid home types: ['Single_Family', 'Multifamily', 'Condo', 'Townhouse']"}), 400
+            query['type'] = {'$in': home_types}
+
+        properties_collection = current_app.db.properties
+        filtered_properties = list(properties_collection.find(query))
+
+        valid_properties = []
+        for property in filtered_properties:
+            property['property_id'] = str(property.pop('_id', None))
+            property_transaction = current_app.db.property_seller_transaction.find_one({"property_id": property['property_id']})
+            if property_transaction and property_transaction['seller_id'] != user['uuid']:
+                valid_properties.append(property)
+
+        log_action(user['uuid'], user['role'], "filtered-properties", {'filters': filters})
+        return jsonify(valid_properties), 200
+
 
 class FavoritePropertyView(MethodView):
     decorators = [custom_jwt_required()]
