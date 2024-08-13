@@ -387,16 +387,17 @@ def validate_property_status(property_status):
     valid_statuses = ['For Sale', 'Pending', 'Sold']
     return property_status in valid_statuses
 
+from firebase_admin import exceptions  # Import exceptions module
 
 def send_notification(device_token):
     try:
-        # Path to your Firebase Admin SDK credentials
-        cred = credentials.Certificate('/home/local/API/airebroker-firebase-adminsdk-er6ol-27eb6bb50a.json')
-        firebase_admin.initialize_app(cred)
+        # Check if Firebase is already initialized
+        if not firebase_admin._apps:
+            cred = credentials.Certificate('/home/local/API/airebroker-firebase-adminsdk-er6ol-27eb6bb50a.json')
+            firebase_admin.initialize_app(cred)
 
-        message_body = "New message Received"
+        message_body = "New message received"
 
-        # Construct the message
         message = messaging.Message(
             notification=messaging.Notification(
                 title='Notification',
@@ -405,8 +406,11 @@ def send_notification(device_token):
             token=device_token,
         )
 
-        # Send the notification message
         response = messaging.send(message)
         return {"success": "Notification sent", "response": response}
+    except exceptions.FirebaseError as e:
+        # Handle specific Firebase errors
+        return {"error": str(e), "detail": "Check if the device token is valid and associated with the correct Firebase project."}
     except Exception as e:
+        # Handle any other exceptions
         return {"error": str(e)}

@@ -26,28 +26,33 @@ api_bp.add_url_rule(rule='/user/reset-passwd', view_func=ResetPasswdView.as_view
 api_bp.add_url_rule(rule='/user/check_response', view_func=CheckResponseView.as_view('check_response'))
 api_bp.add_url_rule(rule='/user/send-message', view_func=SaveUserMessageView.as_view('send_message'))
 
-# Users Media and documents
-api_bp.add_url_rule(rule='/receivemedia', view_func=ReceiveMediaView.as_view('receivemedia'))
-api_bp.add_url_rule(rule='/download-doc', view_func=DownloadDocView.as_view('document_download'))
-api_bp.add_url_rule(rule='/upload-doc', view_func=UploadDocView.as_view('document_upload'))
-api_bp.add_url_rule(rule='user/downloaded-documents', view_func=UserDownloadedDocsView.as_view('user_downloaded_document'))
-api_bp.add_url_rule(rule='user/uploaded-documents', view_func=UserUploadedDocsView.as_view('user_uploaded_document'))
-api_bp.add_url_rule(rule='/user/media', view_func=SendMediaView.as_view('users_media'))
-api_bp.add_url_rule(rule='/user/media/delete', view_func=DeleteMediaView.as_view('users_media_delete'))
-api_bp.add_url_rule(rule='/docs', view_func=AllDocsView.as_view('docs'))
-api_bp.add_url_rule(rule='/docs/filter', view_func=DocumentFilterView.as_view('docs_filter'))
-api_bp.add_url_rule(rule='/user/docs/date', view_func=UserDocsDateRangeView.as_view('user_docs_date_range'))
-api_bp.add_url_rule(rule='/docs/fill-request/<string:document_id>', view_func=DocumentFillRequestView.as_view('docs_fill_request'))
-api_bp.add_url_rule(rule='/docs/<string:document_id>', view_func=DocAnswerInsertionView.as_view('docs_answer'))
-api_bp.add_url_rule(rule='/docs/prefill-answers', view_func=DocumentPrefillAnswerView.as_view('docs_prefill_answers'))
+# Users Media and documents - user documents
+api_bp.add_url_rule(rule='/user-document-', view_func=DownloadDocView.as_view('document_download')) #user documents
+api_bp.add_url_rule(rule='/user-document', view_func=UserDownloadedDocsView.as_view('user_downloaded_document')) #user documents
+api_bp.add_url_rule(rule='/user-document/upload', view_func=UserUploadedDocsView.as_view('user_uploaded_documents')) #user documents
+api_bp.add_url_rule(rule='/user-document', view_func=UploadDocView.as_view('document_upload_post')) #user documents
+api_bp.add_url_rule(rule='/user-document', view_func=UploadDocView.as_view('document_upload')) #user documnets
+api_bp.add_url_rule(rule='/user-document/<string:doc_id>', view_func=UploadDocView.as_view('document_delete')) #user documents
+api_bp.add_url_rule(rule='/user-document/filter', view_func=DocumentFilterView.as_view('document_filter')) #templates
+api_bp.add_url_rule(rule='/user-document/date', view_func=UserDocsDateRangeView.as_view('user_docs_date_range')) #user Documents
 
+# Users Media and documents - Templates
+api_bp.add_url_rule(rule='/template-docs', view_func=AllDocsView.as_view('docs')) #templates
+api_bp.add_url_rule(rule='/template-docs/<string:document_id>', view_func=DocumentFillRequestView.as_view('docs_fill_request')) #Templates
+api_bp.add_url_rule(rule='/template-docs/<string:document_id>', view_func=DocAnswerInsertionView.as_view('docs_answer')) #Templates
+api_bp.add_url_rule(rule='/template-docs', view_func=DocumentPrefillAnswerView.as_view('docs_prefill_answers')) #Templates
 
+#media
+api_bp.add_url_rule(rule='/media', view_func=SendMediaView.as_view('users_media')) #media
+api_bp.add_url_rule(rule='/media', view_func=DeleteMediaView.as_view('users_media_delete')) #media
+api_bp.add_url_rule(rule='/media', view_func=ReceiveMediaView.as_view('receivemedia')) #media
 
 #Properties
 api_bp.add_url_rule(rule='user/properties/add/property-type-selection', view_func=PropertyTypeSelectionView.as_view('property_type_selection'))
 api_bp.add_url_rule(rule='user/properties/add/upload-image', view_func=PropertyUploadImageView.as_view('property_images'))
 api_bp.add_url_rule(rule='user/properties/add/save-pdf', view_func=SavePdfView.as_view('save_pdf'))
 api_bp.add_url_rule(rule='user/properties/add/checkout', view_func=CheckoutView.as_view('property_checkout'))
+api_bp.add_url_rule(rule='user/properties/add/property-tour', view_func=PropertyTourView.as_view('property_tour'))
 
 api_bp.add_url_rule(rule='user/properties/list', view_func=SellerPropertyListView.as_view('user_properties_list'))   #individual seller properties
 api_bp.add_url_rule(rule='user/properties', view_func=AllPropertyListView.as_view('user_properties'))

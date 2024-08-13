@@ -8,7 +8,10 @@ from email_validator import validate_email, EmailNotValidError
 from flask.views import MethodView
 from flask import jsonify, request, url_for
 from flask import current_app
-from flask_jwt_extended import create_access_token, get_jwt_identity, get_jwt
+from flask_jwt_extended import create_access_token, get_jwt_identity, get_jwt, set_access_cookies
+import hashlib
+from datetime import timedelta
+
 from werkzeug.utils import secure_filename
 
 from app.services.admin import log_request
@@ -120,6 +123,7 @@ class LoginUserView(MethodView):
 
         email = data.get('email')
         password = data.get('password')
+        remember_me = data.get('remember_me', False)  # Defaults to False if not provided
 
         if not email or not password:
             return jsonify({"error": "Email or password is missing!"}), 400  # Bad Request
@@ -134,10 +138,19 @@ class LoginUserView(MethodView):
 
             encrypted_password = hashlib.sha256(password.encode("utf-8")).hexdigest()
             if encrypted_password == user['password']:
-                access_token = create_access_token(identity=email)
+                # Set token expiration time based on "Remember Me" option
+                expires_delta = timedelta(days=30) if remember_me else timedelta(hours=1)
+                access_token = create_access_token(identity=email, expires_delta=expires_delta)
+
                 data['password'] = encrypted_password
                 log_action(user['uuid'], user['role'], "email-login", data)
-                return jsonify({"message": "User logged in successfully!", "access_token": access_token}), 200  # OK
+
+                response = jsonify({"message": "User logged in successfully!", "access_token": access_token})
+                
+                # Optionally, you can set the access token as a cookie for web clients
+                set_access_cookies(response, access_token)
+
+                return response, 200  # OK
             else:
                 return jsonify({'error': 'Email or password is incorrect!'}), 401  # Unauthorized
 

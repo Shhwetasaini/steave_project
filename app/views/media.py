@@ -7,7 +7,7 @@ import urllib
 from email_validator import validate_email, EmailNotValidError
 
 from flask.views import MethodView
-from flask import jsonify, request, url_for
+from flask import jsonify, logging, request, url_for
 from flask_jwt_extended import get_jwt_identity
 
 from flask import current_app
@@ -99,7 +99,7 @@ class SendMediaView(MethodView):
             return jsonify([]), 200
         
         log_action(user['uuid'], user['role'], "viewed-media", {})      
-        return jsonify(all_media.get('user_media')), 200
+        return jsonify({'data': all_media.get('user_media')}), 200
 
 
 class DeleteMediaView(MethodView):
@@ -213,10 +213,10 @@ class DownloadDocView(MethodView):
 class UploadDocView(MethodView):
     decorators = [custom_jwt_required()]
 
-    def put(self):
+
+    def post(self):
         log_request()
         current_user = get_jwt_identity()
-
         try:
             validate_email(current_user)
             user = current_app.db.users.find_one({'email': current_user})
@@ -243,7 +243,7 @@ class UploadDocView(MethodView):
             document_data = {
                 'name': file.filename,
                 'url': doc_url,
-                'type': None,
+                'type': "user-docs",
                 'uploaded_at': datetime.now()
             }
 
@@ -258,9 +258,9 @@ class UploadDocView(MethodView):
             return jsonify({"message": "File successfully uploaded!", "uploaded-document": document_data}), 200  # Created
         else:
             return jsonify({"error": "File is missing or invalid filename."}), 400  # Bad Request
-    
-    
-    def delete(self):
+            
+            
+    def delete(self, doc_id):
         log_request()
         current_user = get_jwt_identity()
         try:
@@ -268,40 +268,165 @@ class UploadDocView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-        
+
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
-        # Check if file URL is provided
-        file_url = request.form.get('file_url')
-        if not file_url:
-            return jsonify({'error': 'File URL is missing!'}), 400
-
-        # Extract the filename from the URL
-        file_name = os.path.basename(file_url)
-
-        # Construct the file path
-        user_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid']), 'uploaded_docs')
-        file_path = os.path.join(user_docs_dir, file_name)
-
-        # Delete the file from the server
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        else:
-            return jsonify({'error': 'File not found on the server!'}), 404
-
-        # Update the uploaded_documents collection in the database
-        result = current_app.db.users_uploaded_docs.update_one(
-            {'uuid': user['uuid']},
-            {'$pull': {'uploaded_documents': {'url': file_url}}},
-            upsert=True
+        # Ensure the doc_id is a valid ObjectId
+        try:
+            doc_id = ObjectId(doc_id)
+        except Exception as e:
+            return jsonify({'error': 'Invalid document ID'}), 400
+        
+        data = request.json
+        doc_url = data.get('doc_url')
+       
+        if not doc_url:
+            return jsonify({'error': 'doc_url is required'}), 400
+        user_docs = current_app.db.users_uploaded_docs.update_one(
+            {'uuid': user['uuid'], '_id': doc_id, 'uploaded_documents.url': doc_url},
+            {'$pull': {'uploaded_documents': {'url': doc_url}}}
         )
 
-        if result.modified_count == 0 and result.upserted_id is None:
-            return jsonify({'error': 'Failed to update uploaded_documents collection'}), 500
+        if user_docs.modified_count > 0:
+            doc_url = doc_url
+            file_name = os.path.basename(doc_url)
+            user_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid']), 'uploaded_docs')
+            file_path = os.path.join(user_docs_dir, file_name)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            else:
+                return jsonify({'error': 'File not found on the server!'}), 404
+            log_action(user['uuid'], user['role'], "deleted-user-document", {'file': doc_url})
+            return jsonify({'message': 'Document deleted successfully'}), 204
+        else:
+            return jsonify({"error": "No document found with the given URL, or you are unauthorized to delete"}), 404
+       
+       
+    
+    
+class UserDownloadedDocsView(MethodView):
+    decorators = [custom_jwt_required()]
 
-        log_action(user['uuid'], user['role'], "deleted-user-document", {'file': file_url})
-        return jsonify({'message': 'Document deleted successfully'}), 200
+    def get(self):
+        log_request()
+        current_user = get_jwt_identity()
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        if user:
+            user_docs = current_app.db.users_downloaded_docs.find_one(
+                {'uuid': user['uuid']},
+                {'downloaded_documents': 1, '_id': 0}
+            )
+            if not user_docs:
+                return jsonify([]), 200
+          
+            log_action(user['uuid'], user['role'], "viewed-downloaded-docs", {})
+            return jsonify({'data': user_docs['downloaded_documents']}), 200
+        else:
+            return jsonify({'error': 'User not found'}), 404  #Not found
+
+
+class UserUploadedDocsView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def get(self):
+            log_request()
+            current_user = get_jwt_identity()
+            try:
+                validate_email(current_user)
+                user = current_app.db.users.find_one({'email': current_user})
+            except EmailNotValidError:
+                user = current_app.db.users.find_one({'uuid': current_user})
+        
+            if user:
+                start_date = request.args.get('start_date', None)
+                end_date = request.args.get('end_date', None)
+                filter_state = request.args.get('state', None)
+                
+                log_data = {
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'state': filter_state
+                }
+                
+                # Extract states associated with the user
+                user_states = user.get('states', [])
+                
+                # Default to the first state if no state is provided and user has multiple states
+                if not filter_state and user_states:
+                    filter_state = user_states[0]
+                
+                # Build the base query to match the user and filter by the selected state
+                base_query = {"uuid": user['uuid']}
+                if filter_state:
+                    base_query["uploaded_documents.state"] = filter_state
+                
+                try:
+                    pipeline = [
+                        {"$match": base_query},
+                        {"$project": {
+                            "_id": 0,
+                            "uploaded_documents": {
+                                "$filter": {
+                                    "input": "$uploaded_documents",
+                                    "as": "doc",
+                                    "cond": {
+                                        "$and": [
+                                            {"$gte": ["$$doc.uploaded_at", start_date] if start_date else {"$gte": ["$$doc.uploaded_at", datetime.min]}},
+                                            {"$lte": ["$$doc.uploaded_at", end_date] if end_date else {"$lte": ["$$doc.uploaded_at", datetime.max]}}
+                                        ]
+                                    }
+                                }
+                            }
+                        }}
+                    ]
+
+                    documents = list(current_app.db.users_uploaded_docs.aggregate(pipeline))
+                    log_action(user['uuid'], user['role'], "viewed-uploaded-docs", log_data)
+
+                    if documents and 'uploaded_documents' in documents[0]:
+                        uploaded_docs = documents[0]['uploaded_documents']
+
+                        # Extract unique document types
+                        document_types = list(set(doc.get('type') for doc in uploaded_docs))
+
+                        # Add 'id' for documents if missing
+                        for doc in uploaded_docs:
+                            if '_id' in doc:
+                                doc['id'] = str(doc['_id'])
+                            # Mark recently used based on some condition (e.g., last 7 days)
+                            doc['recently_used'] = (datetime.now() - doc['uploaded_at']).days <= 7
+
+                        return jsonify({
+                            "data": uploaded_docs,
+                            "filters": {
+                                "start_date": start_date,
+                                "end_date": end_date,
+                                "state": filter_state
+                            },
+                            "length": len(uploaded_docs),
+                            "document_types": document_types,
+                            "user_states": user_states,
+                            "filtered_state": filter_state
+                        }), 200
+                    else:
+                        return jsonify({
+                            "data": [],
+                            "filters": {"start_date": start_date, "end_date": end_date, "state": filter_state},
+                            "length": 0,
+                            "document_types": [],
+                            "user_states": user_states,
+                            "filtered_state": filter_state
+                        }), 200
+
+                except ValueError as e:
+                    return jsonify({"error": "Invalid date"}), 400
+            else:
+                return jsonify({'error': 'User not found'}), 404
 
 
 class AllDocsView(MethodView):
@@ -366,65 +491,26 @@ class AllDocsView(MethodView):
         log_action(user['uuid'], user['role'], "viewed-all-documents", {})
         
         response = {
-            'documents': formatted_documents,
-            'folders': list(folders_set),
-            'types': list(types_set)
+            'data': formatted_documents,
+            'filters': {
+                'folders': list(folders_set),
+                'types': list(types_set)
+            }
+            
         }
 
         return jsonify(response), 200
 
 
-class UserDownloadedDocsView(MethodView):
-    decorators = [custom_jwt_required()]
-
-    def get(self):
-        log_request()
-        current_user = get_jwt_identity()
-        try:
-            validate_email(current_user)
-            user = current_app.db.users.find_one({'email': current_user})
-        except EmailNotValidError:
-            user = current_app.db.users.find_one({'uuid': current_user})
-        if user:
-            user_docs = current_app.db.users_downloaded_docs.find_one(
-                {'uuid': user['uuid']},
-                {'downloaded_documents': 1, '_id': 0}
-            )
-            if not user_docs:
-                return jsonify([]), 200
-          
-            log_action(user['uuid'], user['role'], "viewed-downloaded-docs", {})
-            return jsonify(user_docs['downloaded_documents']), 200
-        else:
-            return jsonify({'error': 'User not found'}), 404  #Not found
-
-
-class UserUploadedDocsView(MethodView):
-    decorators = [custom_jwt_required()]
-
-    def get(self):
-        log_request()
-        current_user = get_jwt_identity()
-        try:
-            validate_email(current_user)
-            user = current_app.db.users.find_one({'email': current_user})
-        except EmailNotValidError:
-            user = current_app.db.users.find_one({'uuid': current_user})
-        if user:
-            user_docs = current_app.db.users_uploaded_docs.find_one({'uuid': user['uuid']}, {'uploaded_documents': 1, '_id': 0})
-            if not user_docs:
-                return jsonify([]), 200
-            log_action(user['uuid'], user['role'], "viewed-uploaded-docs", {})
-            return jsonify(user_docs['uploaded_documents']), 200
-        else:
-            return jsonify({'error': 'User not found'}), 404  #Not found
 
 
 class DocumentFilterView(MethodView):
     decorators = [custom_jwt_required()]
 
     def get(self):
+        
         try:
+           
             log_request()
             current_user = get_jwt_identity()
             
@@ -439,7 +525,7 @@ class DocumentFilterView(MethodView):
                 return jsonify({'error': 'User not found'}), 404
 
             # Validate and parse query parameters
-            doc_type = request.args.get('type')
+            doc_type = request.args.get('type',None)
             folder = request.args.get('folder')
             recently_used = request.args.get('recently_used')
 
@@ -466,7 +552,6 @@ class DocumentFilterView(MethodView):
             if not query:
                 return jsonify({'error': 'At least one filter parameter is required.'}), 400
 
-            # Aggregate pipeline
             pipeline = [
                 {"$match": query}
             ]
@@ -477,6 +562,7 @@ class DocumentFilterView(MethodView):
             for doc in documents:
                 doc['_id'] = str(doc['_id'])
 
+        
             log_data = {
                 'type': doc_type,
                 'folder': folder,
@@ -484,11 +570,11 @@ class DocumentFilterView(MethodView):
             }
             log_action(user['uuid'], user['role'], "filtered-documents", log_data)
             
-            return jsonify(documents)
+            return jsonify({"data": documents, "filters": log_data, "length": len(documents)}), 200
         except Exception as e:
+            logging.exception("Error in DocumentFilterView.get")
             return jsonify({"error": str(e)}), 500
 
-        
 
 class UserDocsDateRangeView(MethodView):
     decorators = [custom_jwt_required()]
@@ -572,9 +658,9 @@ class UserDocsDateRangeView(MethodView):
                     'doc_type': doc_type
                 }
                 log_action(user['uuid'], user['role'], "viewed-uploaded-docs-in-daterange", log_data)
-                
+               
                 if documents:
-                    return jsonify(documents[0].get('uploaded_documents'))
+                    return jsonify({"data": documents[0].get('uploaded_documents')})
                 else:
                     return jsonify([]) 
         except Exception as e:
