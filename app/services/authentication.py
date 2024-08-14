@@ -27,12 +27,13 @@ def authenticate_request():
     return token == current_app.config['API_KEY']
 
 
-def custom_jwt_required():
+def custom_jwt_required(fn=None, refresh=False,):
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             try:
-                verify_jwt_in_request()  # Example function to check JWT presence (custom implementation)
+                    # Check for access token and handle it
+                    verify_jwt_in_request()  # Example function to check JWT presence (custom implementation)
             except DecodeError:
                 return jsonify({'error': 'Invalid token format'}), 401  # Unauthorized
             except InvalidTokenError:
@@ -138,3 +139,5 @@ def insert_liked_properties(user_uuid, liked_properties):
     )  
 
     return {'success': True}
+
+

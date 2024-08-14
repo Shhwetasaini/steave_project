@@ -16,6 +16,8 @@ api_bp.add_url_rule(rule='/user/register', view_func=RegisterUserView.as_view('r
 api_bp.add_url_rule(rule='/user/uuid', view_func=UserUUIDView.as_view('user_uuid'))
 api_bp.add_url_rule(rule='/user/verify-otp', view_func=VerifyOtpView.as_view('verify_otp'))
 api_bp.add_url_rule(rule='/user/login', view_func=LoginUserView.as_view('login'))
+api_bp.add_url_rule(rule='/user/validate_token', view_func=ValidateTokenView.as_view('validate_token'))
+# api_bp.add_url_rule(rule='/user/refresh_token', view_func=RefreshTokenView.as_view('refresh_token'))
 api_bp.add_url_rule(rule='/user/signin', view_func=UserUuidLoginView.as_view('signin')) #for uuid login
 api_bp.add_url_rule(rule='/user/profile', view_func=ProfileUserView.as_view('profile'))
 api_bp.add_url_rule(rule='/user/logout', view_func=LogoutUserView.as_view('logout'))
@@ -27,7 +29,7 @@ api_bp.add_url_rule(rule='/user/check_response', view_func=CheckResponseView.as_
 api_bp.add_url_rule(rule='/user/send-message', view_func=SaveUserMessageView.as_view('send_message'))
 
 # Users Media and documents - user documents
-api_bp.add_url_rule(rule='/user-document-', view_func=DownloadDocView.as_view('document_download')) #user documents
+api_bp.add_url_rule(rule='/user-document/download', view_func=DownloadDocView.as_view('document_download')) #user documents
 api_bp.add_url_rule(rule='/user-document', view_func=UserDownloadedDocsView.as_view('user_downloaded_document')) #user documents
 api_bp.add_url_rule(rule='/user-document/upload', view_func=UserUploadedDocsView.as_view('user_uploaded_documents')) #user documents
 api_bp.add_url_rule(rule='/user-document', view_func=UploadDocView.as_view('document_upload_post')) #user documents

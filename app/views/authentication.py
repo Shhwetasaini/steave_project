@@ -8,7 +8,7 @@ from email_validator import validate_email, EmailNotValidError
 from flask.views import MethodView
 from flask import jsonify, request, url_for
 from flask import current_app
-from flask_jwt_extended import create_access_token, get_jwt_identity, get_jwt, set_access_cookies
+from flask_jwt_extended import create_access_token,create_refresh_token, get_jwt_identity, get_jwt, set_access_cookies, verify_jwt_in_request
 import hashlib
 from datetime import timedelta
 
@@ -116,7 +116,6 @@ class LoginUserView(MethodView):
     def post(self):
         log_request()
 
-        # Determine content type and parse data accordingly
         if not request.is_json:
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
         data = request.json
@@ -138,16 +137,23 @@ class LoginUserView(MethodView):
 
             encrypted_password = hashlib.sha256(password.encode("utf-8")).hexdigest()
             if encrypted_password == user['password']:
-                # Set token expiration time based on "Remember Me" option
                 expires_delta = timedelta(days=30) if remember_me else timedelta(hours=1)
                 access_token = create_access_token(identity=email, expires_delta=expires_delta)
+
+                # Include user information in the response
+                user_info = {
+                    "uuid": user.get("uuid"),
+                    "first_name": user.get("first_name"),
+                    "last_name": user.get("last_name"),
+                    "email": user.get("email"),
+                    "phone": user.get("phone"),
+                    "role": user.get("role"),
+                }
 
                 data['password'] = encrypted_password
                 log_action(user['uuid'], user['role'], "email-login", data)
 
-                response = jsonify({"message": "User logged in successfully!", "access_token": access_token})
-                
-                # Optionally, you can set the access token as a cookie for web clients
+                response = jsonify({"message": "User logged in successfully!", "access_token": access_token, "user_info": user_info})
                 set_access_cookies(response, access_token)
 
                 return response, 200  # OK
@@ -155,7 +161,6 @@ class LoginUserView(MethodView):
                 return jsonify({'error': 'Email or password is incorrect!'}), 401  # Unauthorized
 
         return jsonify({'error': 'User does not exist, please register the user!'}), 404  # Not Found
-
 
 class UserUuidLoginView(MethodView):
     def post(self):
@@ -425,3 +430,24 @@ class VerifyOtpView(MethodView):
                 return jsonify({'error': 'OTP has expired or already used'}), 400  # Bad Request
         else:
             return jsonify({'error': 'Invalid OTP or Email'}), 400  # Bad Request
+
+class ValidateTokenView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def get(self):
+        log_request()
+        try:
+            verify_jwt_in_request()
+            jwt_data = get_jwt()
+            return jsonify({"valid": True, "jwt_data": jwt_data}), 200  # OK
+        except Exception as e:
+            return jsonify({"valid": False, "error": str(e)}), 401  # Unauthorized
+        
+# class RefreshTokenView(MethodView):
+#     decorators = [custom_jwt_required(refresh=True)]
+
+#     def post(self):
+#         log_request()
+#         current_user = get_jwt_identity()
+#         new_access_token = create_access_token(identity=current_user)
+#         return jsonify({"access_token": new_access_token}), 200  # OK
