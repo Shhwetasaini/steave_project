@@ -17,31 +17,30 @@ api_bp.add_url_rule(rule='/user/uuid', view_func=UserUUIDView.as_view('user_uuid
 api_bp.add_url_rule(rule='/user/verify-otp', view_func=VerifyOtpView.as_view('verify_otp'))
 api_bp.add_url_rule(rule='/user/login', view_func=LoginUserView.as_view('login'))
 api_bp.add_url_rule(rule='/user/validate_token', view_func=ValidateTokenView.as_view('validate_token'))
-# api_bp.add_url_rule(rule='/user/refresh_token', view_func=RefreshTokenView.as_view('refresh_token'))
+api_bp.add_url_rule(rule='/user/refresh_token', view_func=RefreshTokenView.as_view('refresh_token')) #token refresh
 api_bp.add_url_rule(rule='/user/signin', view_func=UserUuidLoginView.as_view('signin')) #for uuid login
 api_bp.add_url_rule(rule='/user/profile', view_func=ProfileUserView.as_view('profile'))
 api_bp.add_url_rule(rule='/user/logout', view_func=LogoutUserView.as_view('logout'))
 api_bp.add_url_rule(rule='/user/update', view_func=UpdateUsersView.as_view('update_user'))
 api_bp.add_url_rule(rule='/user/forgot-passwd', view_func=ForgetPasswdView.as_view('forgot_passwd'))
 api_bp.add_url_rule(rule='/user/reset-passwd', view_func=ResetPasswdView.as_view('reset_passwd'))
+api_bp.add_url_rule(rule='/search-address', view_func=SearchAddressAutoCompleteView.as_view('search-address'))
+
 
 api_bp.add_url_rule(rule='/user/check_response', view_func=CheckResponseView.as_view('check_response'))
 api_bp.add_url_rule(rule='/user/send-message', view_func=SaveUserMessageView.as_view('send_message'))
 
 # Users Media and documents - user documents
-api_bp.add_url_rule(rule='/user-document/download', view_func=DownloadDocView.as_view('document_download')) #user documents
-api_bp.add_url_rule(rule='/user-document', view_func=UserDownloadedDocsView.as_view('user_downloaded_document')) #user documents
-api_bp.add_url_rule(rule='/user-document/upload', view_func=UserUploadedDocsView.as_view('user_uploaded_documents')) #user documents
+api_bp.add_url_rule(rule='/user-document/download', view_func=DownloadDocView.as_view('document_download_post')) #user documents
+api_bp.add_url_rule(rule='/user-document/download', view_func=UserDownloadedDocsView.as_view('user_downloaded_document_get')) #user documents
+api_bp.add_url_rule(rule='/user-document/filter', view_func=UserDocumentsView.as_view('user_uploaded_documents')) #user documents
 api_bp.add_url_rule(rule='/user-document', view_func=UploadDocView.as_view('document_upload_post')) #user documents
-api_bp.add_url_rule(rule='/user-document', view_func=UploadDocView.as_view('document_upload')) #user documnets
-api_bp.add_url_rule(rule='/user-document/<string:doc_id>', view_func=UploadDocView.as_view('document_delete')) #user documents
-api_bp.add_url_rule(rule='/user-document/filter', view_func=DocumentFilterView.as_view('document_filter')) #templates
-api_bp.add_url_rule(rule='/user-document/date', view_func=UserDocsDateRangeView.as_view('user_docs_date_range')) #user Documents
+api_bp.add_url_rule(rule='/user-document/<string:doc_id>', view_func=UploadDocView.as_view('document_delete_put')) #user documents
 
 # Users Media and documents - Templates
 api_bp.add_url_rule(rule='/template-docs', view_func=AllDocsView.as_view('docs')) #templates
 api_bp.add_url_rule(rule='/template-docs/<string:document_id>', view_func=DocumentFillRequestView.as_view('docs_fill_request')) #Templates
-api_bp.add_url_rule(rule='/template-docs/<string:document_id>', view_func=DocAnswerInsertionView.as_view('docs_answer')) #Templates
+api_bp.add_url_rule(rule='/template-docs/answer/<string:document_id>', view_func=DocAnswerInsertionView.as_view('docs_answer-get-post')) #Templates
 api_bp.add_url_rule(rule='/template-docs', view_func=DocumentPrefillAnswerView.as_view('docs_prefill_answers')) #Templates
 
 #media

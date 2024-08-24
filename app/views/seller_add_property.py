@@ -120,8 +120,8 @@ class PropertyTypeSelectionView(MethodView):
             "features": data.get('features', []),
             "type_and_styles": data.get('type_and_styles', []),
             "materials": data.get('materials', []),
-            "listed_date": data.get('listed_date', None),
-            "last_updated_date": data.get('last_updated_date', None),
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
             "available_viewing_times": data.get('available_viewing_times', []),
             "open_house_times": data.get('open_house_times', [])
         }       
@@ -250,7 +250,8 @@ class PropertyTourView(MethodView):
             {'_id': ObjectId(property_id)},
             {'$set': {
                 'available_viewing_times': available_times,
-                'open_house_times': open_house_times
+                'open_house_times': open_house_times,
+                'updated_at': datetime.now()
             }}
         )
 
@@ -329,7 +330,7 @@ class PropertyUploadImageView(MethodView):
                 
                 current_app.db.properties.update_one(
                     {"_id": ObjectId(transaction_data['property_data']['property_id'])},
-                    {"$set": {"images": image_urls}}
+                    {"$set": {"images": image_urls, "updated_at": datetime.now()}}, 
                 )
                 current_app.db.transaction.update_one(
                     {"_id": ObjectId(transaction_id)},

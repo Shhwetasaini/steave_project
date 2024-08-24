@@ -178,14 +178,19 @@ def get_receivers(user_role_key, user_uuid, query=None):
                     receiver['last_name'] = other_user.get('last_name')
                     receiver['profile_pic'] = other_user.get('profile_pic')
                     receiver['user_id'] = receiver.pop('other_user_id')
+                    receiver[''] = other_user.get('profile_pic')
                     filtered_receivers.append(receiver)
         return filtered_receivers
     
     for receiver in receivers:
         other_user = current_app.db.users.find_one({'uuid': receiver['other_user_id']}, {'email': 1, 'first_name': 1, 'last_name': 1, 'profile_pic': 1, '_id': 0})
-        property_details = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, 'images': 1,  '_id': 0})
+        property_details = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, 'images': 1,  '_id': 0, 'baths':1, 'beds': 1, 'price': 1, 'size': 1})
         receiver['property_address'] = property_details['address'] if property_details else None
         receiver['property_images'] = property_details['images'] if property_details else None
+        receiver['property_price'] = property_details['price'] if property_details else None
+        receiver['beds'] = property_details['beds'] if property_details else None
+        receiver['baths'] = property_details['baths'] if property_details else None
+        receiver['property_size'] = property_details['size'] if property_details else None
         receiver['email'] = other_user.get('email') if other_user else None
         receiver['first_name'] = other_user.get('first_name') if other_user else None
         receiver['last_name'] = other_user.get('last_name') if other_user else None
@@ -414,3 +419,9 @@ def send_notification(device_token):
     except Exception as e:
         # Handle any other exceptions
         return {"error": str(e)}
+    
+
+def save_archived_message(chat_message):
+    # Save the archived message only in the 'archived_messages' collection
+    current_app.db.archived_messages.insert_one(chat_message)
+    

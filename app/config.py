@@ -25,6 +25,7 @@ class Config:
     MQTT_PASSWD = os.getenv('MQTT_BROKER_PASSWD')
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
     JWT_ACCESS_TOKEN_EXPIRES = datetime.timedelta(days=1)
+    
     UPLOAD_FOLDER =  os.path.abspath('app/media')
     MAIL_USERNAME = os.getenv('MAIL_USERNAME')
     SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')

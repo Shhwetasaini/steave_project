@@ -181,6 +181,7 @@ class DownloadDocView(MethodView):
             'name': document['name'],
             'url': document['url'],
             'type': document['type'],
+            'state' : document['state'],
             'downloaded_at': datetime.now()
         }
 
@@ -247,6 +248,7 @@ class UploadDocView(MethodView):
                 'name': file.filename,
                 'url': doc_url,
                 'type': "user-docs",
+                'state': None,
                 'uploaded_at': datetime.now()
             }
 
@@ -413,80 +415,12 @@ class UserDownloadedDocsView(MethodView):
             return jsonify({'error': 'User not found'}), 404  #Not found
 
 
-class UserUploadedDocsView(MethodView):
-    decorators = [custom_jwt_required()]
 
-    def get(self):
-        log_request()
-        current_user = get_jwt_identity()
-        try:
-            validate_email(current_user)
-            user = current_app.db.users.find_one({'email': current_user})
-        except EmailNotValidError:
-            user = current_app.db.users.find_one({'uuid': current_user})
-       
-        if user:
-            start_date = request.args.get('start_date', None)
-            end_date = request.args.get('end_date',)
-            log_data = {
-                'start_date': start_date,
-                'end_date': end_date
-            }
-            if start_date and end_date:
-                try:
-                    start_date = datetime.fromisoformat(start_date)
-                    end_date = datetime.fromisoformat(end_date)
-                    pipeline = [
-                        {
-                            "$match": {
-                                "uuid": user['uuid']
-                            }
-                        },
-                        {
-                            "$project": {
-                                "_id": 0,
-                                "uploaded_documents": {
-                                    "$filter": {
-                                        "input": "$uploaded_documents",
-                                        "as": "doc",
-                                        "cond": {
-                                            "$and": [
-                                                {"$gt": ["$$doc.uploaded_at", start_date]},
-                                                {"$lt": ["$$doc.uploaded_at", end_date]}
-                                            ]
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    ]               
-                    
-                
-                    documents = list(current_app.db.users_uploaded_docs.aggregate(pipeline))
-                    log_action(user['uuid'], user['role'], "viewed-uploaded-docs", log_data)
-                    if documents and 'uploaded_documents' in documents[0]:
-                        uploaded_docs = documents[0]['uploaded_documents']
-                        for doc in uploaded_docs:
-                            if '_id' in doc:
-                                doc['id'] = str(doc['_id'])
-                    return jsonify({"data": documents[0].get('uploaded_documents'), "filters": {"start_date":start_date, "end_date": end_date}, "length": len(documents[0].get('uploaded_documents'))}), 200
-                except ValueError as e:
-                   return jsonify({"error": "Invalid date"}), 400
-            else:
-                user_docs = current_app.db.users_uploaded_docs.find_one({'uuid': user['uuid']}, {'uploaded_documents': 1, '_id': 0})
-                if user_docs and 'uploaded_documents' in user_docs:
-                    uploaded_docs = user_docs['uploaded_documents']
-                    for doc in uploaded_docs:
-                        if '_id' in doc:
-                            doc['id'] = str(doc['_id'])
-                log_action(user['uuid'], user['role'], "viewed-uploaded-docs", log_data)
-                return jsonify({"data": user_docs.get('uploaded_documents'), "filters": {"start_date":None, "end_date": None}, "length": len(user_docs.get('uploaded_documents'))}), 200
-        else:
-            return jsonify({'error': 'User not found'}), 404  #Not found
 
 class AllDocsView(MethodView):
+    
     decorators = [custom_jwt_required()]
-
+    
     def get(self):
         log_request()
         current_user = get_jwt_identity()
@@ -496,18 +430,33 @@ class AllDocsView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
+
         if not user:
             return jsonify({'error': 'User not found'}), 404
-        
+
+        # Extract query parameters for filtering
+        query_type = request.args.get('type')
+        query_folder = request.args.get('folder')
+        recently_used = request.args.get('recently_used')
+        start_date = request.args.get('start_date')  # Optional start date filter
+        end_date = request.args.get('end_date')  # Optional end date filter
+
+        # Validate the recently_used parameter
+        if recently_used not in [None, 'true', 'false']:
+            return jsonify({'error': 'Invalid value for recently_used parameter. Expected "true" or "false".'}), 400
+        recently_used = recently_used == 'true'
+
+        # Prepare document directories
         flforms_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'FL_Forms')
         mnforms_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms')
-
         folders_set = set()
         types_set = set()
 
         for forms_dir in [flforms_docs_dir, mnforms_docs_dir]:
             forms_type = "FL_Forms" if forms_dir == flforms_docs_dir else "MN_Forms"
+            state = "Florida" if forms_dir == flforms_docs_dir else "Minnesota"
             types_set.add(forms_type)
+
             for folder in os.listdir(forms_dir):
                 folder_path = os.path.join(forms_dir, folder)
                 if os.path.isdir(folder_path):
@@ -517,7 +466,7 @@ class AllDocsView(MethodView):
                             doc_name = file
                             doc_url = url_for('serve_media', filename=os.path.join('templates/' + forms_type, folder, file).replace('\\', '/'))
                             preview_page_url = doc_url[:-4] + '.jpg'
-
+                            
                             # Check if document already exists in MongoDB
                             if not document_exists(doc_name):
                                 image_name = extract_first_page_as_image(os.path.join(folder_path, file))
@@ -532,12 +481,41 @@ class AllDocsView(MethodView):
                                             'preview_image': preview_page_url,
                                             'description': "",
                                             'type': forms_type,
+                                            "state": state,
                                             'folder': folder
                                         }
                                         current_app.db.documents.insert_one(document_data)
 
-        # Retrieve data from MongoDB and return as JSON response
-        documents = list(current_app.db.documents.find({}))
+        # Build the MongoDB query with filters
+        query_filter = {}
+        if query_type:
+            query_filter['type'] = query_type
+        if query_folder:
+            query_filter['folder'] = query_folder
+        if recently_used:
+            try:
+                thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+                query_filter['added_at'] = {"$gte": thirty_days_ago}
+            except Exception as e:
+                return jsonify({'error': 'Error calculating date for recently used filter.'}), 400
+
+        # Add date range filtering if start_date or end_date is provided
+        if start_date or end_date:
+            date_filter = {}
+            if start_date:
+                try:
+                    date_filter['$gte'] = datetime.strptime(start_date, "%Y-%m-%d")
+                except ValueError:
+                    return jsonify({'error': 'Invalid start_date format. Expected YYYY-MM-DD.'}), 400
+            if end_date:
+                try:
+                    date_filter['$lte'] = datetime.strptime(end_date, "%Y-%m-%d")
+                except ValueError:
+                    return jsonify({'error': 'Invalid end_date format. Expected YYYY-MM-DD.'}), 400
+            query_filter['added_at'] = date_filter
+
+        # Retrieve data from MongoDB with filters and return as JSON response
+        documents = list(current_app.db.documents.find(query_filter))
         formatted_documents = []
         for doc in documents:
             doc['id'] = str(doc.pop('_id'))
@@ -550,86 +528,13 @@ class AllDocsView(MethodView):
             'filters': {
                 'folders': list(folders_set),
                 'types': list(types_set)
-            }
-            
+            },
+            "length": len(documents)
         }
-
         return jsonify(response), 200
+    
 
-
-class DocumentFilterView(MethodView):
-    decorators = [custom_jwt_required()]
-
-    def get(self):
-        
-        try:
-           
-            log_request()
-            current_user = get_jwt_identity()
-            
-            # Validate the current user
-            try:
-                validate_email(current_user)
-                user = current_app.db.users.find_one({'email': current_user})
-            except EmailNotValidError:
-                user = current_app.db.users.find_one({'uuid': current_user})
-
-            if not user:
-                return jsonify({'error': 'User not found'}), 404
-
-            # Validate and parse query parameters
-            doc_type = request.args.get('type',None)
-            folder = request.args.get('folder')
-            recently_used = request.args.get('recently_used')
-
-            # Validate 'recently_used' parameter
-            if recently_used not in [None, 'true', 'false']:
-                return jsonify({'error': 'Invalid value for recently_used parameter. Expected "true" or "false".'}), 400
-
-            recently_used = recently_used == 'true'
-
-            # Build query based on validated parameters
-            query = {}
-            if doc_type:
-                query['type'] = doc_type
-            if folder:
-                query['folder'] = folder
-            if recently_used:
-                try:
-                    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-                    query['added_at'] = {"$gte": thirty_days_ago}
-                except Exception as e:
-                    return jsonify({'error': 'Error calculating date for recently used filter.'}), 400
-
-            # Ensure the query is properly constructed
-            if not query:
-                return jsonify({'error': 'At least one filter parameter is required.'}), 400
-
-            pipeline = [
-                {"$match": query}
-            ]
-
-            # Fetch documents
-            documents = list(current_app.db.documents.aggregate(pipeline))
-
-            for doc in documents:
-                doc['_id'] = str(doc['_id'])
-
-        
-            log_data = {
-                'type': doc_type,
-                'folder': folder,
-                'recently_used': recently_used
-            }
-            log_action(user['uuid'], user['role'], "filtered-documents", log_data)
-            
-            return jsonify({"data": documents, "filters": log_data, "length": len(documents)}), 200
-        except Exception as e:
-            logging.exception("Error in DocumentFilterView.get")
-            return jsonify({"error": str(e)}), 500
-
-
-class UserDocsDateRangeView(MethodView):
+class UserDocumentsView(MethodView):
     decorators = [custom_jwt_required()]
     
     def get(self):
@@ -643,79 +548,57 @@ class UserDocsDateRangeView(MethodView):
                 user = current_app.db.users.find_one({'uuid': current_user})
 
             if not user:
-                return jsonify({'error': 'User not found'})
+                return jsonify({'error': 'User not found'}), 404
 
-            start_date = request.args.get('start_date')
-            end_date = request.args.get('end_date')
-            doc_type = request.args.get('doc_type')
+            start_date_str = request.args.get('start_date')
+            end_date_str = request.args.get('end_date')
 
-            if not start_date or not end_date or not doc_type:
-                return jsonify({"error": "Please provide start_date, end_date and doc_type in params"}), 400
-            if doc_type not in ['user-docs', 'all-docs']:
-                return jsonify({"error": "Invalid value provided in params for doc_type"}), 400
+            # Convert strings to datetime objects if provided
+            start_date = datetime.fromisoformat(start_date_str) if start_date_str else None
+            end_date = datetime.fromisoformat(end_date_str) if end_date_str else None
 
-            start_date = datetime.fromisoformat(start_date)
-            end_date = datetime.fromisoformat(end_date)
+            # Construct the conditions based on the provided dates
+            date_conditions = []
+            if start_date:
+                date_conditions.append({"$gte": ["$$doc.uploaded_at", start_date]})
+            if end_date:
+                date_conditions.append({"$lte": ["$$doc.uploaded_at", end_date]})
 
-            if doc_type == 'all-docs':
-                documents = list(current_app.db.documents.find(
-                    {
-                        "added_at": {
-                            "$gt": start_date,
-                            "$lt": end_date
-                        }
-                    },
-                    {
-                        '_id': 0
+            # If there are conditions, use them; otherwise, return true (no filtering)
+            cond = {"$and": date_conditions} if date_conditions else True
+            pipeline = [
+                {
+                    "$match": {
+                        "uuid": user['uuid']
                     }
-                ))
-                
-                log_data = {
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'doc_type': doc_type
-                }
-                log_action(user['uuid'], user['role'], "viewed-uploaded-docs-in-daterange", log_data)
-                return jsonify(documents)
-            elif doc_type == 'user-docs':
-                pipeline = [
-                    {
-                        "$match": {
-                            "uuid": user['uuid']
-                        }
-                    },
-                    {
-                        "$project": {
-                            "_id": 0,
-                            "uploaded_documents": {
-                                "$filter": {
-                                    "input": "$uploaded_documents",
-                                    "as": "doc",
-                                    "cond": {
-                                        "$and": [
-                                            {"$gt": ["$$doc.uploaded_at", start_date]},
-                                            {"$lt": ["$$doc.uploaded_at", end_date]}
-                                        ]
-                                    }
-                                }
+                },
+                {
+                    "$project": {
+                        "_id": 0,
+                        "uploaded_documents": {
+                            "$filter": {
+                                "input": "$uploaded_documents",
+                                "as": "doc",
+                                "cond": cond
                             }
                         }
                     }
-                ]               
-
-                documents = list(current_app.db.users_uploaded_docs.aggregate(pipeline))
-
-                log_data = {
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'doc_type': doc_type
                 }
-                log_action(user['uuid'], user['role'], "viewed-uploaded-docs-in-daterange", log_data)
-               
-                if documents:
-                    return jsonify({"data": documents[0].get('uploaded_documents')})
-                else:
-                    return jsonify([]) 
+            ]
+
+            documents = list(current_app.db.users_uploaded_docs.aggregate(pipeline))
+
+            log_data = {
+                'start_date': start_date_str,
+                'end_date': end_date_str,
+            }
+            log_action(user['uuid'], user['role'], "viewed-uploaded-docs-in-daterange", log_data)
+
+            if documents and documents[0].get('uploaded_documents'):
+                filtered_documents = documents[0]['uploaded_documents']
+                return jsonify({"data": filtered_documents, "filters": log_data, "length": len(filtered_documents)}), 200
+            else:
+                return jsonify({"data": [], "filters": log_data, "length": 0}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -767,6 +650,7 @@ class DocumentFillRequestView(MethodView):
                 'name': filename,
                 'url': doc_url,
                 'type': doc_type,
+                'state': document.get('state'),
                 'is_signed': False,
                 'uploaded_at': datetime.now()
             }

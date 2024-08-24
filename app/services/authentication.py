@@ -14,6 +14,8 @@ from datetime import datetime
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail as SendGridMail
 
+from email_validator  import validate_email, EmailNotValidError
+
 
 
 def get_session_files(session_id):
@@ -27,13 +29,13 @@ def authenticate_request():
     return token == current_app.config['API_KEY']
 
 
-def custom_jwt_required(fn=None, refresh=False,):
+def custom_jwt_required():
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            try:
-                    # Check for access token and handle it
-                    verify_jwt_in_request()  # Example function to check JWT presence (custom implementation)
+            try:  
+                # Check for access token and handle it
+                verify_jwt_in_request()  
             except DecodeError:
                 return jsonify({'error': 'Invalid token format'}), 401  # Unauthorized
             except InvalidTokenError:
@@ -141,3 +143,9 @@ def insert_liked_properties(user_uuid, liked_properties):
     return {'success': True}
 
 
+def validate_user(current_user):
+    try:
+        validate_email(current_user)
+        return current_app.db.users.find_one({'email': current_user})
+    except EmailNotValidError:
+        return current_app.db.users.find_one({'uuid': current_user})

@@ -20,7 +20,7 @@ from app.services.properties import (
     validate_address, save_panoramic_image,
     validate_property_status, validate_property_type
 )
-
+from app.services.authentication import validate_user
 
 class SellerPropertyListView(MethodView):
     decorators = [custom_jwt_required()]
@@ -131,6 +131,53 @@ class ExternalPropertyAddView(MethodView):
         log_request()
         try:
             data = request.json
+            current_time = datetime.now()
+            property_address = data.get('seller_address', None)
+            property_type = data.get('property_type', None)
+            property_status = data.get('status', None)
+
+            if not property_address or not property_type:
+                return jsonify({"error": "seller_address and property_type fields are required"}), 400
+
+            if property_address.isdigit():
+                return jsonify({'error': 'Invalid seller_address'}), 400
+
+            # Check if the address contains "US" or "United States" or "États-Unis"
+            if not re.search(r'\b(US|United States|USA|États-Unis|U\.S\.?)\b', property_address, flags=re.IGNORECASE):
+                return jsonify({'error': 'Please enter a valid address in the United States.'}), 400
+
+            # Check if seller_property_address is in Minnesota or Florida
+            if not any(keyword in property_address.lower() for keyword in ['mn', 'minnesota', 'fl', 'florida']):
+                return jsonify({'error': "The address must be located in Minnesota (MN) or Florida (FL)."}), 400
+
+            # Validate the address
+            valid_address = validate_address(property_address)
+            if not valid_address:
+                return jsonify({'error': "Invalid Address. missing country, state or postal_code"}), 400
+
+            # Validate property_type
+            valid_property_type = validate_property_type(property_type)
+            if not valid_property_type:
+                return jsonify({'error': f"Invalid property_type. Applicable types are: [Condo, Townhouse, Single_Family, Multifamily]"}), 400
+
+            # Validate property_status if provided
+            if property_status is not None and property_status != '':
+                valid_status = validate_property_status(property_status)
+                if not valid_status:
+                    return jsonify({'error': f"Invalid status. Applicable statuses are: [For Sale, Pending, Sold, Cancelled]"}), 400
+
+            # Prepare property data with validated inputs
+            data['created_at'] = current_time
+            data['updated_at'] = current_time
+            data['latitude'] = float(data.get('latitude', 0.0) or 0.0)
+            data['longitude'] = float(data.get('longitude', 0.0) or 0.0)
+            data['beds'] = int(data.get('beds', 0) or 0)
+            data['baths'] = int(data.get('baths', 0) or 0)
+            data['price'] = float(data.get('price', 0.0) or 0.0)
+            data['size'] = float(data.get('size', 0.0) or 0.0)
+            data['attached_garage'] = int(data.get('attached_garage', 0) or 0)
+            data['garage_size'] = float(data.get('garage_size', 0.0) or 0.0)
+
             property_insert_result = current_app.db.properties.insert_one(data)
             inserted_property_id = str(property_insert_result.inserted_id)
             data['property_id'] =  inserted_property_id
@@ -270,7 +317,7 @@ class UserPropertyView(MethodView):
                         )  
                     else:
                         update_data[key] = value
-                
+            update_data['updated_at'] = datetime.now()  
             # Update property document in MongoDB
             current_app.db.properties.update_one({'_id': ObjectId(property_id)}, {'$set': update_data})
             # Add image if provided
@@ -404,7 +451,8 @@ class PanoramicImageView(MethodView):
                 }
                 current_app.db.properties.update_one(
                     {"_id": ObjectId(property_id), "panoramic_images.property_version": property_version},
-                    {"$push": {"panoramic_images.$.3d_images": new_image}}
+                    {"$push": {"panoramic_images.$.3d_images": new_image}, "$set": {"updated_at": datetime.now()}},
+                    
                 )
 
                 log_action(user['uuid'], user['role'], "uploaded-panoramic-images", new_image)
@@ -429,7 +477,8 @@ class PanoramicImageView(MethodView):
             }
             current_app.db.properties.update_one(
                 {'_id': ObjectId(property_id)},
-                {'$push': {'panoramic_images': new_property_version_images}}
+                {'$push': {'panoramic_images': new_property_version_images}, "$set": {"updated_at": datetime.now()}},
+                
             )
             
             log_action(user['uuid'], user['role'], "uploaded-panoramic-images", new_property_version_images)
@@ -438,12 +487,8 @@ class PanoramicImageView(MethodView):
     def get(self, property_id):
         log_request()
         current_user = get_jwt_identity()
-
-        try:
-            validate_email(current_user)
-            user = current_app.db.users.find_one({'email': current_user})
-        except EmailNotValidError:
-            user = current_app.db.users.find_one({'uuid': current_user})
+        
+        user = validate_user(current_user)
 
         if not user:
             return jsonify({'error': 'User not found'}), 404
@@ -513,7 +558,7 @@ class PanoramicImageView(MethodView):
                 else:
                     current_app.db.properties.update_one(
                         {"_id": ObjectId(property_id)},
-                        {"$pull": {"panoramic_images": {"property_version": property_version}}}
+                        {"$pull": {"panoramic_images": {"property_version": property_version}},"$set": {"updated_at": datetime.now()}}
                     )
             else:
                 updated_panoramic_images.append(panorama)
@@ -526,7 +571,7 @@ class PanoramicImageView(MethodView):
 
         current_app.db.properties.update_one(
             {"_id": ObjectId(property_id)},
-            {"$set": {"panoramic_images": updated_panoramic_images}}
+            {"$set": {"panoramic_images": updated_panoramic_images, "updated_at": datetime.now()}}
         )
 
         log_action(user['uuid'], user['role'], "deleted-panoramic-images", {"property_id": property_id, "property_version": property_version, "order": order})
@@ -571,7 +616,7 @@ class PropertyImageLabelUpdateView(MethodView):
         # Update the image URL and label in the database
         result = current_app.db.properties.update_one(
             {"_id": ObjectId(property_id), "images.name": image_name, "images.image_url": url},
-            {"$set": {"images.$.label": new_label}}
+            {"$set": {"images.$.label": new_label, "updated_at": datetime.now()}}
         )
 
         # Check if the update was successful
@@ -639,7 +684,7 @@ class PropertyImageDeleteView(MethodView):
         # Update the user's properties in the database to reflect the removed image
         result = current_app.db.properties.update_one(
             {'_id': ObjectId(property_id)},
-            {'$set': {'images': property_images}}
+            {'$set': {'images': property_images, "updated_at": datetime.now()}}
         )
 
         if result.modified_count == 0:
