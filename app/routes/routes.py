@@ -8,7 +8,9 @@ from app.views.admin.documents import *
 from app.views.admin.messaging import *
 from app.views.admin.users import *
 from app.views.admin.context_processors import *
-
+from app.views.pre_qualified import *
+from app.views.id_verification import *
+from app.views.saved_searches import *
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -109,3 +111,21 @@ api_bp.add_url_rule(rule='/users/buyer/seller/chat/search', view_func=BuyerSelle
 api_bp.add_url_rule(rule='/users/customer/property/chat', view_func=UserCustomerServicePropertySendMesssageView.as_view('user-customer-service_chat'), methods=['POST'])
 api_bp.add_url_rule(rule='/users/customer/property/chat/<property_id>', view_func=UserCustomerServicePropertySendMesssageView.as_view('user-customer-service_message'), methods=['GET'])
 api_bp.add_url_rule(rule='/users/customer/property/chat/list', view_func=UserCustomerServicePropertyChatUserList.as_view('user_customer_property_chat_list'))
+
+# Routes for fre-qualified 
+api_bp.add_url_rule('/timeline_stage', view_func=PrequalView.as_view('timeline_stage'), methods=['POST'])
+api_bp.add_url_rule('/home_use_type', view_func=PrequalView.as_view('home_use_type'), methods=['POST'])
+api_bp.add_url_rule('/budget_payment', view_func=PrequalView.as_view('budget_payment'), methods=['POST'])
+api_bp.add_url_rule('/personal_info', view_func=PrequalView.as_view('personal_info'), methods=['POST'])
+api_bp.add_url_rule('/real_estate_agent', view_func=PrequalView.as_view('real_estate_agent'), methods=['POST'])
+api_bp.add_url_rule('/borrower', view_func=PrequalView.as_view('co_borrower'), methods=['POST'])
+api_bp.add_url_rule('/citizenship_financial_history', view_func=PrequalView.as_view('citizenship_financial_history'), methods=['POST'])
+api_bp.add_url_rule('/va_first_time_homebuyer', view_func=PrequalView.as_view('va_first_time_homebuyer'), methods=['POST'])
+api_bp.add_url_rule('/credit_score', view_func=PrequalView.as_view('credit_score'), methods=['POST'])
+
+# Idverifications
+api_bp.add_url_rule(rule='/id-verification',view_func=IDVerificationView.as_view('id_verification'),methods=['POST'])
+
+#saved search 
+api_bp.add_url_rule('/saved_searches', view_func=SavedSearchView.as_view('saved_searches'), methods=['GET', 'POST'])
+api_bp.add_url_rule('/saved_searches/<string:search_id>', view_func=SavedSearchView.as_view('saved_search'), methods=['GET', 'PUT', 'DELETE'])

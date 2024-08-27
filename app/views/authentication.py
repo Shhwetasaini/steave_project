@@ -453,17 +453,42 @@ class ValidateTokenView(MethodView):
     def get(self):
         log_request()
         try:
-                    # Check for access token and handle it
-            verify_jwt_in_request() 
             
-            return jsonify({'message': "token is valid"}) # Example function to check JWT presence (custom implementation)
+            verify_jwt_in_request()
+            current_user = get_jwt_identity()
+            jwt_claims = get_jwt()
+
+            
+            token_info = {
+                "valid": True,
+                "message": "Token is valid",
+                "user_identity": current_user,
+                "token_claims": jwt_claims,  
+                "expires_at": jwt_claims.get("exp", None),
+                "issued_at": jwt_claims.get("iat", None),  
+                "jti": jwt_claims.get("jti", None)  
+            }
+
+            return jsonify(token_info), 200
+
         except DecodeError:
-            return jsonify({'error': 'Invalid token format'}), 401  # Unauthorized
+            return jsonify({
+                "valid": False,
+                "error": "Invalid token format"
+            }), 401  
+
         except InvalidTokenError:
-            return jsonify({'error': 'Token has expired or invalid!'}), 401  # Unauthorized
+            return jsonify({
+                "valid": False,
+                "error": "Token has expired or is invalid!"
+            }), 401  
+
         except Exception as e:
             logging.error(f"Token validation error: {str(e)}")
-            return jsonify({"valid": False, "error": str(e)}), 401  # Unauthorized
+            return jsonify({
+                "valid": False,
+                "error": str(e)
+            }), 401  
          
 class RefreshTokenView(MethodView):
     decorators = [jwt_required(refresh=True)]
@@ -473,7 +498,11 @@ class RefreshTokenView(MethodView):
         try:
             current_user = get_jwt_identity()
             new_access_token = create_access_token(identity=current_user)
-            return jsonify({"access_token": new_access_token}), 200
+            new_refresh_token = create_refresh_token(identity=current_user)
+            return jsonify({
+                "access_token": new_access_token,
+                "refresh_token": new_refresh_token
+            }), 200
         except Exception as e:
             logging.error(f"Error during token refresh: {str(e)}")
             return jsonify({"error": str(e)}), 401

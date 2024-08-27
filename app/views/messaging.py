@@ -205,6 +205,7 @@ class BuyerSellersChatView(MethodView):
         return jsonify(messages['message_content']), 200
     
 
+     
     def post(self):
         from app import mqtt_client
         log_request()
@@ -244,11 +245,7 @@ class BuyerSellersChatView(MethodView):
 
         chat_message = {
             'property_id': property_id,
-            'message_content': [
-                {
-                    'msg_id': user['uuid']
-                }
-            ],
+            'message_content': [],
             'key': 'buyer_seller_messaging',
             'archived': archived  # Adding archived flag to the message
         }
@@ -266,9 +263,12 @@ class BuyerSellersChatView(MethodView):
 
         chat_message['buyer_id'] = buyer_id
         chat_message['seller_id'] = seller_id  
-
-        if message:
-            chat_message['message_content'][0]['message'] = message
+        timestamp = datetime.now()
+        new_message_content = {
+            'msg_id': user['uuid'],
+            'message': message if message else '',
+            'timestamp': timestamp
+        }
 
         if file and werkzeug.utils.secure_filename(file.filename):
             allowed_extensions = {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}
@@ -281,9 +281,8 @@ class BuyerSellersChatView(MethodView):
                 user_media_path = os.path.join(user_media_dir, filename)
                 file.save(user_media_path)
                 media_url = url_for('serve_media', filename=os.path.join('user_docs', str(user['uuid']), 'uploaded_docs', filename))
-                chat_message['message_content'][0]['media'] = media_url
+                new_message_content['media'] = media_url
                 document_data = {
-                    'doc_id': str(ObjectId()),
                     'name': filename,
                     'sender': user.get('first_name') + " " + user.get('last_name'),
                     'property_name': user_property.get('name'),
@@ -311,29 +310,16 @@ class BuyerSellersChatView(MethodView):
             topic=mqtt_topic, 
             payload=json.dumps(chat_message)
         )
-        
+
         mqtt_client.unsubscribe(mqtt_topic)
 
-        # Attempt to send notification and log any issues, but do not block the chat functionality
         notify = send_notification(receiver.get('device_token'))
         if notify.get('error'):
             current_app.logger.error(f"Notification Error: {notify['error']}")
 
         log_action(user['uuid'], user['role'], "buyer_seller_chat-send_message", chat_message)
 
-        # Save the message to the appropriate collection based on the archived flag
         if archived:
-            new_message_content = {
-                'msg_id': user['uuid'],
-                'message': message if message else '',
-                'archived_at': datetime.now(),
-            }
-            
-            if 'media' in chat_message['message_content'][0]:
-                new_message_content['media'] = chat_message['message_content'][0]['media']
-
-            chat_message['message_content'][0] = new_message_content
-
             # Existing archived message check
             existing_message = current_app.db.archived_messages.find_one({
                 'buyer_id': buyer_id,
@@ -342,28 +328,17 @@ class BuyerSellersChatView(MethodView):
             })
 
             if existing_message:
-                # Add new message content as a nested object with timestamp
                 current_app.db.archived_messages.update_one(
                     {'_id': existing_message['_id']},
                     {'$push': {'message_content': new_message_content}}
                 )
                 return jsonify({'message': 'Message successfully added to archive'}), 200
             else:
-                # Create a new document if not exists
-                current_app.db.archived_messages.insert_one(chat_message)
-                return jsonify({'message': 'Message successfully sent and archived'}), 201
+                chat_message['message_content'].append(new_message_content)
+                # Save the archived message to a different storage bucket/folder
+                save_archived_message(chat_message)  # This method should handle saving in the separate location
+                return jsonify({'message': 'Message successfully archived'}), 201
         else:
-            # Create the message content object without archived timestamp
-            new_message_content = {
-                'msg_id': user['uuid'],
-                'message': message if message else ''
-            }
-            
-            if 'media' in chat_message['message_content'][0]:
-                new_message_content['media'] = chat_message['message_content'][0]['media']
-
-            chat_message['message_content'][0] = new_message_content
-
             # Existing buyer_seller_messaging message check
             existing_message = current_app.db.buyer_seller_messaging.find_one({
                 'buyer_id': buyer_id,
@@ -372,17 +347,15 @@ class BuyerSellersChatView(MethodView):
             })
 
             if existing_message:
-                # Add new message content as a nested object
                 current_app.db.buyer_seller_messaging.update_one(
                     {'_id': existing_message['_id']},
                     {'$push': {'message_content': new_message_content}}
                 )
                 return jsonify({'message': 'Message successfully added'}), 200
             else:
-                # Create a new document if not exists
+                chat_message['message_content'].append(new_message_content)
                 current_app.db.buyer_seller_messaging.insert_one(chat_message)
                 return jsonify({'message': 'Message successfully sent'}), 201
-
 
 class BuyerSellerChatUsersListView(MethodView):
     decorators = [custom_jwt_required()]
