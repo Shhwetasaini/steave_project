@@ -65,7 +65,7 @@ api_bp.add_url_rule(rule='user/properties/image/label', view_func=PropertyImageL
 api_bp.add_url_rule(rule='user/properties/add/external', view_func=ExternalPropertyAddView.as_view('user_properties_add_external'))
 api_bp.add_url_rule(rule='user/properties/panoramic_images', view_func=PanoramicImageView.as_view('user_properties_add_panoramic_images'))
 api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>', view_func=PanoramicImageView.as_view('user_properties_get_panoramic_images'))
-api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>/<int:property_version>/<int:order>', view_func=PanoramicImageView.as_view('user_properties_delete_panoramic_images'))
+api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>/<int:property_version>/<int:order>', view_func=PanoramicImageView.as_view('user_properties_delete_panoramic_images')) #method for delete
 api_bp.add_url_rule(rule='user/properties/search', view_func=PropertySearchFilterView.as_view('user_property_search'))
 api_bp.add_url_rule(rule='user/properties/mobile_search', view_func=PropertySearchFilterMobileView.as_view('user_property_mobile_search'))
 api_bp.add_url_rule(rule='user/properties/favorite', view_func=FavoritePropertyView.as_view('user_property_favorite'))
@@ -113,15 +113,14 @@ api_bp.add_url_rule(rule='/users/customer/property/chat/<property_id>', view_fun
 api_bp.add_url_rule(rule='/users/customer/property/chat/list', view_func=UserCustomerServicePropertyChatUserList.as_view('user_customer_property_chat_list'))
 
 # Routes for fre-qualified 
-api_bp.add_url_rule('/timeline_stage', view_func=PrequalView.as_view('timeline_stage'), methods=['POST'])
+api_bp.add_url_rule('/timeline_homebuying_stage', view_func=PrequalView.as_view('timeline_homebuying_stage'), methods=['POST'])
 api_bp.add_url_rule('/home_use_type', view_func=PrequalView.as_view('home_use_type'), methods=['POST'])
-api_bp.add_url_rule('/budget_payment', view_func=PrequalView.as_view('budget_payment'), methods=['POST'])
+api_bp.add_url_rule('/income_employment_details', view_func=PrequalView.as_view('income_employment_details'), methods=['POST'])
 api_bp.add_url_rule('/personal_info', view_func=PrequalView.as_view('personal_info'), methods=['POST'])
-api_bp.add_url_rule('/real_estate_agent', view_func=PrequalView.as_view('real_estate_agent'), methods=['POST'])
-api_bp.add_url_rule('/borrower', view_func=PrequalView.as_view('co_borrower'), methods=['POST'])
-api_bp.add_url_rule('/citizenship_financial_history', view_func=PrequalView.as_view('citizenship_financial_history'), methods=['POST'])
-api_bp.add_url_rule('/va_first_time_homebuyer', view_func=PrequalView.as_view('va_first_time_homebuyer'), methods=['POST'])
-api_bp.add_url_rule('/credit_score', view_func=PrequalView.as_view('credit_score'), methods=['POST'])
+api_bp.add_url_rule('/budget_details', view_func=PrequalView.as_view('budget_details'), methods=['POST'])
+api_bp.add_url_rule('/budget_detail', view_func=PrequalView.as_view('budget_detail'), methods=['POST'])
+api_bp.add_url_rule('/credit_score_estimate', view_func=PrequalView.as_view('credit_score'), methods=['POST'])
+
 
 # Idverifications
 api_bp.add_url_rule(rule='/id-verification',view_func=IDVerificationView.as_view('id_verification'),methods=['POST'])

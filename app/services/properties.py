@@ -133,6 +133,7 @@ def save_panoramic_image(panoramic_image, user, property_id):
         org_filename = secure_filename(panoramic_image.filename)
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         filename = f"{timestamp}_{org_filename}"
+
         user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id), 'panoramic_image')
         os.makedirs(user_media_dir, exist_ok=True)
 
@@ -141,11 +142,13 @@ def save_panoramic_image(panoramic_image, user, property_id):
         
         image_path = os.path.join(user_media_dir, filename)
         panoramic_image.save(image_path)
-        image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), 'panoramic_image', org_filename))
 
-        return {'image_url':image_url, 'filename': filename}
+        image_url = f"https://papi.airebrokers.com/media/user_properties/{str(user['uuid'])}/{str(property_id)}/panoramic_image/{filename}"
+
+        return {'image_url': image_url, 'filename': filename}
+
     except Exception as e:
-        return  {'error': str(e)}
+        return {'error': str(e)}
 
 def get_receivers(user_role_key, user_uuid, query=None):
     pipeline = [
@@ -392,7 +395,7 @@ def validate_property_status(property_status):
     valid_statuses = ['For Sale', 'Pending', 'Sold']
     return property_status in valid_statuses
 
-from firebase_admin import exceptions  # Import exceptions module
+from firebase_admin import exceptions 
 
 def send_notification(device_token):
     try:
