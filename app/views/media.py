@@ -5,9 +5,9 @@ import requests
 import os
 import urllib
 from email_validator import validate_email, EmailNotValidError
-
+from pymongo.errors import OperationFailure
 from flask.views import MethodView
-from flask import jsonify, request, url_for
+from flask import jsonify, logging, request, url_for
 from flask_jwt_extended import get_jwt_identity
 
 from flask import current_app
@@ -99,7 +99,7 @@ class SendMediaView(MethodView):
             return jsonify([]), 200
         
         log_action(user['uuid'], user['role'], "viewed-media", {})      
-        return jsonify(all_media.get('user_media')), 200
+        return jsonify({'data': all_media.get('user_media')}), 200
 
 
 class DeleteMediaView(MethodView):
@@ -164,21 +164,24 @@ class DownloadDocView(MethodView):
             return jsonify({'error': 'User not found'}), 404
         if not request.content_type.startswith('multipart/form-data'):
             return jsonify({"error": "Unsupported Content Type"}), 415
+        
         data = request.form
         name = data.get('filename')
 
         if not name:
             return jsonify({"error": "name is missing!"}), 400  # Bad Request
 
-        document = current_app.db.documents.find_one({'name':name})
+        document = current_app.db.documents.find_one({'name': name})
 
         if not document:
-            return jsonify({'error':"document does not exist!"}), 404  # Not Found
+            return jsonify({'error': "Document does not exist!"}), 404  # Not Found
 
         document_data = {
+            'doc_id': str(ObjectId()),  # Generate a unique ID for the document
             'name': document['name'],
             'url': document['url'],
             'type': document['type'],
+            'state' : document['state'],
             'downloaded_at': datetime.now()
         }
 
@@ -203,20 +206,20 @@ class DownloadDocView(MethodView):
         else:
             current_app.db.users_downloaded_docs.update_one(
                 {'uuid': user['uuid']}, 
-                {'$push': { 'downloaded_documents':document_data}},
-               upsert=True
+                {'$push': {'downloaded_documents': document_data}},
+                upsert=True
             )
             log_action(user['uuid'], user['role'], "downloaded-document", document_data)
             return jsonify({"message": "Document successfully added to user's documents"}), 200  # Created
 
-   
+
 class UploadDocView(MethodView):
     decorators = [custom_jwt_required()]
 
-    def put(self):
+    def post(self):
         log_request()
         current_user = get_jwt_identity()
-
+        
         try:
             validate_email(current_user)
             user = current_app.db.users.find_one({'email': current_user})
@@ -241,9 +244,11 @@ class UploadDocView(MethodView):
             doc_url = url_for('serve_media', filename=os.path.join('user_docs', str(user['uuid']), 'uploaded_docs', filename))
 
             document_data = {
+                'doc_id': str(ObjectId()),  # Generate a unique ID for the document
                 'name': file.filename,
                 'url': doc_url,
-                'type': None,
+                'type': "user-docs",
+                'state': None,
                 'uploaded_at': datetime.now()
             }
 
@@ -258,9 +263,9 @@ class UploadDocView(MethodView):
             return jsonify({"message": "File successfully uploaded!", "uploaded-document": document_data}), 200  # Created
         else:
             return jsonify({"error": "File is missing or invalid filename."}), 400  # Bad Request
-    
-    
-    def delete(self):
+            
+            
+    def delete(self, doc_id):
         log_request()
         current_user = get_jwt_identity()
         try:
@@ -268,46 +273,48 @@ class UploadDocView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-        
+
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
-        # Check if file URL is provided
-        file_url = request.form.get('file_url')
-        if not file_url:
-            return jsonify({'error': 'File URL is missing!'}), 400
+        doc_id = str(doc_id)
 
-        # Extract the filename from the URL
-        file_name = os.path.basename(file_url)
-
-        # Construct the file path
-        user_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid']), 'uploaded_docs')
-        file_path = os.path.join(user_docs_dir, file_name)
-
-        # Delete the file from the server
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        else:
-            return jsonify({'error': 'File not found on the server!'}), 404
-
-        # Update the uploaded_documents collection in the database
-        result = current_app.db.users_uploaded_docs.update_one(
-            {'uuid': user['uuid']},
-            {'$pull': {'uploaded_documents': {'url': file_url}}},
-            upsert=True
+        # Find the document before deleting it
+        user_doc = current_app.db.users_uploaded_docs.find_one(
+            {'uuid': user['uuid'], 'uploaded_documents.doc_id': doc_id},
+            {'uploaded_documents.$': 1}
         )
 
-        if result.modified_count == 0 and result.upserted_id is None:
-            return jsonify({'error': 'Failed to update uploaded_documents collection'}), 500
+        if not user_doc or 'uploaded_documents' not in user_doc:
+            return jsonify({"error": "No document found with the given ID, or you are unauthorized to delete"}), 404
 
-        log_action(user['uuid'], user['role'], "deleted-user-document", {'file': file_url})
-        return jsonify({'message': 'Document deleted successfully'}), 200
+        # Get the document details
+        document = user_doc['uploaded_documents'][0]
+        doc_url = document['url']
 
+        # Delete the document from the user's uploaded documents
+        user_docs = current_app.db.users_uploaded_docs.update_one(
+            {'uuid': user['uuid']},
+            {'$pull': {'uploaded_documents': {'doc_id': doc_id}}}
+        )
 
-class AllDocsView(MethodView):
-    decorators = [custom_jwt_required()]
-
-    def get(self):
+        if user_docs.modified_count > 0:
+            # Document was found and deleted from the database
+            file_name = os.path.basename(doc_url)
+            user_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid']), 'uploaded_docs')
+            file_path = os.path.join(user_docs_dir, file_name)
+            
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                log_action(user['uuid'], user['role'], "deleted-user-document", {'file': doc_url})
+                return jsonify({'message': 'Document deleted successfully'}), 200
+            else:
+                return jsonify({'error': 'File not found on the server!'}), 404
+        else:
+            return jsonify({"error": "Failed to delete the document"}), 500
+        
+    
+    def put(self, doc_id):
         log_request()
         current_user = get_jwt_identity()
 
@@ -316,64 +323,73 @@ class AllDocsView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
+            
         if not user:
             return jsonify({'error': 'User not found'}), 404
+
+        # Ensure the doc_id is a valid ObjectId
+        try:
+            doc_id = str(doc_id)
+        except Exception as e:
+            return jsonify({'error': 'Invalid document ID'}), 400
+
+        # Find the document to update
+        user_doc = current_app.db.users_uploaded_docs.find_one(
+            {'uuid': user['uuid'], 'uploaded_documents.doc_id': doc_id},
+            {'uploaded_documents.$': 1}
+        )
+
+        if not user_doc or 'uploaded_documents' not in user_doc:
+            return jsonify({"error": "Document not found or unauthorized"}), 404
+
+        # Prepare updated document data
+        updated_document = {}
+
+        file = request.files.get('file')
+        if file and werkzeug.utils.secure_filename(file.filename):
+            org_filename = werkzeug.utils.secure_filename(file.filename)
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            filename = f"{timestamp}_{org_filename}"
+            user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_docs', str(user['uuid']), 'uploaded_docs')
+            os.makedirs(user_media_dir, exist_ok=True)
+            user_doc_path = os.path.join(user_media_dir, filename)
+            file.save(user_doc_path)
+
+            # Update document data with the new file
+            doc_url = url_for('serve_media', filename=os.path.join('user_docs', str(user['uuid']), 'uploaded_docs', filename))
+            updated_document['uploaded_documents.$.name'] = file.filename
+            updated_document['uploaded_documents.$.url'] = doc_url
+
+        # Update metadata fields if provided
+        if 'type' in request.form:
+            updated_document['uploaded_documents.$.type'] = request.form['type']
+        if 'name' in request.form:
+            updated_document['uploaded_documents.$.name'] = request.form['name']
         
-        flforms_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'FL_Forms')
-        mnforms_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms')
+        # Update the document's upload time
+        updated_document['uploaded_documents.$.uploaded_at'] = datetime.now()
 
-        folders_set = set()
-        types_set = set()
+        # Update the document in the database
+        result = current_app.db.users_uploaded_docs.update_one(
+            {'uuid': user['uuid'], 'uploaded_documents.doc_id': doc_id},
+            {'$set': updated_document}
+        )
 
-        for forms_dir in [flforms_docs_dir, mnforms_docs_dir]:
-            forms_type = "FL_Forms" if forms_dir == flforms_docs_dir else "MN_Forms"
-            types_set.add(forms_type)
-            for folder in os.listdir(forms_dir):
-                folder_path = os.path.join(forms_dir, folder)
-                if os.path.isdir(folder_path):
-                    folders_set.add(folder)
-                    for file in os.listdir(folder_path):
-                        if file.endswith('.pdf'):
-                            doc_name = file
-                            doc_url = url_for('serve_media', filename=os.path.join('templates/' + forms_type, folder, file).replace('\\', '/'))
-                            preview_page_url = doc_url[:-4] + '.jpg'
-
-                            # Check if document already exists in MongoDB
-                            if not document_exists(doc_name):
-                                image_name = extract_first_page_as_image(os.path.join(folder_path, file))
-                                if image_name:
-                                    # Check if preview image already exists in MongoDB and folder
-                                    if not resource_exists(preview_page_url, doc_url):
-                                        # Store data in MongoDB
-                                        document_data = {
-                                            'name': doc_name,
-                                            'url': doc_url,
-                                            'added_at': datetime.now(),
-                                            'preview_image': preview_page_url,
-                                            'description': "",
-                                            'type': forms_type,
-                                            'folder': folder
-                                        }
-                                        current_app.db.documents.insert_one(document_data)
-
-        # Retrieve data from MongoDB and return as JSON response
-        documents = list(current_app.db.documents.find({}))
-        formatted_documents = []
-        for doc in documents:
-            doc['id'] = str(doc.pop('_id'))
-            formatted_documents.append(doc)
-
-        log_action(user['uuid'], user['role'], "viewed-all-documents", {})
-        
-        response = {
-            'documents': formatted_documents,
-            'folders': list(folders_set),
-            'types': list(types_set)
-        }
-
-        return jsonify(response), 200
-
-
+        if result.matched_count > 0 and result.modified_count > 0:
+            # Retrieve the updated document to return it in the response
+            updated_doc = current_app.db.users_uploaded_docs.find_one(
+                {'uuid': user['uuid'], 'uploaded_documents.doc_id': doc_id},
+                {'uploaded_documents.$': 1}
+            )
+            if updated_doc and 'uploaded_documents' in updated_doc:
+                updated_document = updated_doc['uploaded_documents'][0]
+                log_action(user['uuid'], user['role'], "updated-user-document", updated_document)
+                return jsonify({"message": "Document updated successfully", "updated-document": updated_document}), 200
+            else:
+                return jsonify({"error": "Failed to retrieve updated document"}), 500
+        else:
+            return jsonify({"error": "Failed to update the document"}), 500
+                    
 class UserDownloadedDocsView(MethodView):
     decorators = [custom_jwt_required()]
 
@@ -394,103 +410,131 @@ class UserDownloadedDocsView(MethodView):
                 return jsonify([]), 200
           
             log_action(user['uuid'], user['role'], "viewed-downloaded-docs", {})
-            return jsonify(user_docs['downloaded_documents']), 200
+            return jsonify({'data': user_docs['downloaded_documents']}), 200
         else:
             return jsonify({'error': 'User not found'}), 404  #Not found
 
 
-class UserUploadedDocsView(MethodView):
-    decorators = [custom_jwt_required()]
 
+
+class AllDocsView(MethodView):
+    
+    decorators = [custom_jwt_required()]
+    
     def get(self):
         log_request()
         current_user = get_jwt_identity()
+
         try:
             validate_email(current_user)
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-        if user:
-            user_docs = current_app.db.users_uploaded_docs.find_one({'uuid': user['uuid']}, {'uploaded_documents': 1, '_id': 0})
-            if not user_docs:
-                return jsonify([]), 200
-            log_action(user['uuid'], user['role'], "viewed-uploaded-docs", {})
-            return jsonify(user_docs['uploaded_documents']), 200
-        else:
-            return jsonify({'error': 'User not found'}), 404  #Not found
 
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
 
-class DocumentFilterView(MethodView):
-    decorators = [custom_jwt_required()]
+        # Extract query parameters for filtering
+        query_type = request.args.get('type')
+        query_folder = request.args.get('folder')
+        recently_used = request.args.get('recently_used')
+        start_date = request.args.get('start_date')  # Optional start date filter
+        end_date = request.args.get('end_date')  # Optional end date filter
 
-    def get(self):
-        try:
-            log_request()
-            current_user = get_jwt_identity()
-            
-            # Validate the current user
+        # Validate the recently_used parameter
+        if recently_used not in [None, 'true', 'false']:
+            return jsonify({'error': 'Invalid value for recently_used parameter. Expected "true" or "false".'}), 400
+        recently_used = recently_used == 'true'
+
+        # Prepare document directories
+        flforms_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'FL_Forms')
+        mnforms_docs_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'templates', 'MN_Forms')
+        folders_set = set()
+        types_set = set()
+
+        for forms_dir in [flforms_docs_dir, mnforms_docs_dir]:
+            forms_type = "FL_Forms" if forms_dir == flforms_docs_dir else "MN_Forms"
+            state = "Florida" if forms_dir == flforms_docs_dir else "Minnesota"
+            types_set.add(forms_type)
+
+            for folder in os.listdir(forms_dir):
+                folder_path = os.path.join(forms_dir, folder)
+                if os.path.isdir(folder_path):
+                    folders_set.add(folder)
+                    for file in os.listdir(folder_path):
+                        if file.endswith('.pdf'):
+                            doc_name = file
+                            doc_url = url_for('serve_media', filename=os.path.join('templates/' + forms_type, folder, file).replace('\\', '/'))
+                            preview_page_url = doc_url[:-4] + '.jpg'
+                            
+                            # Check if document already exists in MongoDB
+                            if not document_exists(doc_name):
+                                image_name = extract_first_page_as_image(os.path.join(folder_path, file))
+                                if image_name:
+                                    # Check if preview image already exists in MongoDB and folder
+                                    if not resource_exists(preview_page_url, doc_url):
+                                        # Store data in MongoDB
+                                        document_data = {
+                                            'name': doc_name,
+                                            'url': doc_url,
+                                            'added_at': datetime.now(),
+                                            'preview_image': preview_page_url,
+                                            'description': "",
+                                            'type': forms_type,
+                                            "state": state,
+                                            'folder': folder
+                                        }
+                                        current_app.db.documents.insert_one(document_data)
+
+        # Build the MongoDB query with filters
+        query_filter = {}
+        if query_type:
+            query_filter['type'] = query_type
+        if query_folder:
+            query_filter['folder'] = query_folder
+        if recently_used:
             try:
-                validate_email(current_user)
-                user = current_app.db.users.find_one({'email': current_user})
-            except EmailNotValidError:
-                user = current_app.db.users.find_one({'uuid': current_user})
+                thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+                query_filter['added_at'] = {"$gte": thirty_days_ago}
+            except Exception as e:
+                return jsonify({'error': 'Error calculating date for recently used filter.'}), 400
 
-            if not user:
-                return jsonify({'error': 'User not found'}), 404
-
-            # Validate and parse query parameters
-            doc_type = request.args.get('type')
-            folder = request.args.get('folder')
-            recently_used = request.args.get('recently_used')
-
-            # Validate 'recently_used' parameter
-            if recently_used not in [None, 'true', 'false']:
-                return jsonify({'error': 'Invalid value for recently_used parameter. Expected "true" or "false".'}), 400
-
-            recently_used = recently_used == 'true'
-
-            # Build query based on validated parameters
-            query = {}
-            if doc_type:
-                query['type'] = doc_type
-            if folder:
-                query['folder'] = folder
-            if recently_used:
+        # Add date range filtering if start_date or end_date is provided
+        if start_date or end_date:
+            date_filter = {}
+            if start_date:
                 try:
-                    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-                    query['added_at'] = {"$gte": thirty_days_ago}
-                except Exception as e:
-                    return jsonify({'error': 'Error calculating date for recently used filter.'}), 400
+                    date_filter['$gte'] = datetime.strptime(start_date, "%Y-%m-%d")
+                except ValueError:
+                    return jsonify({'error': 'Invalid start_date format. Expected YYYY-MM-DD.'}), 400
+            if end_date:
+                try:
+                    date_filter['$lte'] = datetime.strptime(end_date, "%Y-%m-%d")
+                except ValueError:
+                    return jsonify({'error': 'Invalid end_date format. Expected YYYY-MM-DD.'}), 400
+            query_filter['added_at'] = date_filter
 
-            # Ensure the query is properly constructed
-            if not query:
-                return jsonify({'error': 'At least one filter parameter is required.'}), 400
+        # Retrieve data from MongoDB with filters and return as JSON response
+        documents = list(current_app.db.documents.find(query_filter))
+        formatted_documents = []
+        for doc in documents:
+            doc['id'] = str(doc.pop('_id'))
+            formatted_documents.append(doc)
 
-            # Aggregate pipeline
-            pipeline = [
-                {"$match": query}
-            ]
-
-            # Fetch documents
-            documents = list(current_app.db.documents.aggregate(pipeline))
-
-            for doc in documents:
-                doc['_id'] = str(doc['_id'])
-
-            log_data = {
-                'type': doc_type,
-                'folder': folder,
-                'recently_used': recently_used
-            }
-            log_action(user['uuid'], user['role'], "filtered-documents", log_data)
-            
-            return jsonify(documents)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-
+        log_action(user['uuid'], user['role'], "viewed-all-documents", {})
         
+        response = {
+            'data': formatted_documents,
+            'filters': {
+                'folders': list(folders_set),
+                'types': list(types_set)
+            },
+            "length": len(documents)
+        }
+        return jsonify(response), 200
+    
 
-class UserDocsDateRangeView(MethodView):
+class UserDocumentsView(MethodView):
     decorators = [custom_jwt_required()]
     
     def get(self):
@@ -504,79 +548,57 @@ class UserDocsDateRangeView(MethodView):
                 user = current_app.db.users.find_one({'uuid': current_user})
 
             if not user:
-                return jsonify({'error': 'User not found'})
+                return jsonify({'error': 'User not found'}), 404
 
-            start_date = request.args.get('start_date')
-            end_date = request.args.get('end_date')
-            doc_type = request.args.get('doc_type')
+            start_date_str = request.args.get('start_date')
+            end_date_str = request.args.get('end_date')
 
-            if not start_date or not end_date or not doc_type:
-                return jsonify({"error": "Please provide start_date, end_date and doc_type in params"}), 400
-            if doc_type not in ['user-docs', 'all-docs']:
-                return jsonify({"error": "Invalid value provided in params for doc_type"}), 400
+            # Convert strings to datetime objects if provided
+            start_date = datetime.fromisoformat(start_date_str) if start_date_str else None
+            end_date = datetime.fromisoformat(end_date_str) if end_date_str else None
 
-            start_date = datetime.fromisoformat(start_date)
-            end_date = datetime.fromisoformat(end_date)
+            # Construct the conditions based on the provided dates
+            date_conditions = []
+            if start_date:
+                date_conditions.append({"$gte": ["$$doc.uploaded_at", start_date]})
+            if end_date:
+                date_conditions.append({"$lte": ["$$doc.uploaded_at", end_date]})
 
-            if doc_type == 'all-docs':
-                documents = list(current_app.db.documents.find(
-                    {
-                        "added_at": {
-                            "$gt": start_date,
-                            "$lt": end_date
-                        }
-                    },
-                    {
-                        '_id': 0
+            # If there are conditions, use them; otherwise, return true (no filtering)
+            cond = {"$and": date_conditions} if date_conditions else True
+            pipeline = [
+                {
+                    "$match": {
+                        "uuid": user['uuid']
                     }
-                ))
-                
-                log_data = {
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'doc_type': doc_type
-                }
-                log_action(user['uuid'], user['role'], "viewed-uploaded-docs-in-daterange", log_data)
-                return jsonify(documents)
-            elif doc_type == 'user-docs':
-                pipeline = [
-                    {
-                        "$match": {
-                            "uuid": user['uuid']
-                        }
-                    },
-                    {
-                        "$project": {
-                            "_id": 0,
-                            "uploaded_documents": {
-                                "$filter": {
-                                    "input": "$uploaded_documents",
-                                    "as": "doc",
-                                    "cond": {
-                                        "$and": [
-                                            {"$gt": ["$$doc.uploaded_at", start_date]},
-                                            {"$lt": ["$$doc.uploaded_at", end_date]}
-                                        ]
-                                    }
-                                }
+                },
+                {
+                    "$project": {
+                        "_id": 0,
+                        "uploaded_documents": {
+                            "$filter": {
+                                "input": "$uploaded_documents",
+                                "as": "doc",
+                                "cond": cond
                             }
                         }
                     }
-                ]               
-
-                documents = list(current_app.db.users_uploaded_docs.aggregate(pipeline))
-
-                log_data = {
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'doc_type': doc_type
                 }
-                log_action(user['uuid'], user['role'], "viewed-uploaded-docs-in-daterange", log_data)
-                
-                if documents:
-                    return jsonify(documents[0].get('uploaded_documents'))
-                else:
-                    return jsonify([]) 
+            ]
+
+            documents = list(current_app.db.users_uploaded_docs.aggregate(pipeline))
+
+            log_data = {
+                'start_date': start_date_str,
+                'end_date': end_date_str,
+            }
+            log_action(user['uuid'], user['role'], "viewed-uploaded-docs-in-daterange", log_data)
+
+            if documents and documents[0].get('uploaded_documents'):
+                filtered_documents = documents[0]['uploaded_documents']
+                return jsonify({"data": filtered_documents, "filters": log_data, "length": len(filtered_documents)}), 200
+            else:
+                return jsonify({"data": [], "filters": log_data, "length": 0}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -628,6 +650,7 @@ class DocumentFillRequestView(MethodView):
                 'name': filename,
                 'url': doc_url,
                 'type': doc_type,
+                'state': document.get('state'),
                 'is_signed': False,
                 'uploaded_at': datetime.now()
             }

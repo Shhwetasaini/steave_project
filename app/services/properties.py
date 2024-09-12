@@ -133,6 +133,7 @@ def save_panoramic_image(panoramic_image, user, property_id):
         org_filename = secure_filename(panoramic_image.filename)
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         filename = f"{timestamp}_{org_filename}"
+
         user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'user_properties', str(user['uuid']), str(property_id), 'panoramic_image')
         os.makedirs(user_media_dir, exist_ok=True)
 
@@ -141,11 +142,13 @@ def save_panoramic_image(panoramic_image, user, property_id):
         
         image_path = os.path.join(user_media_dir, filename)
         panoramic_image.save(image_path)
-        image_url = url_for('serve_media', filename=os.path.join('user_properties', str(user['uuid']), str(property_id), 'panoramic_image', org_filename))
 
-        return {'image_url':image_url, 'filename': filename}
+        image_url = f"https://papi.airebrokers.com/media/user_properties/{str(user['uuid'])}/{str(property_id)}/panoramic_image/{filename}"
+
+        return {'image_url': image_url, 'filename': filename}
+
     except Exception as e:
-        return  {'error': str(e)}
+        return {'error': str(e)}
 
 def get_receivers(user_role_key, user_uuid, query=None):
     pipeline = [
@@ -178,14 +181,19 @@ def get_receivers(user_role_key, user_uuid, query=None):
                     receiver['last_name'] = other_user.get('last_name')
                     receiver['profile_pic'] = other_user.get('profile_pic')
                     receiver['user_id'] = receiver.pop('other_user_id')
+                    receiver[''] = other_user.get('profile_pic')
                     filtered_receivers.append(receiver)
         return filtered_receivers
     
     for receiver in receivers:
         other_user = current_app.db.users.find_one({'uuid': receiver['other_user_id']}, {'email': 1, 'first_name': 1, 'last_name': 1, 'profile_pic': 1, '_id': 0})
-        property_details = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, 'images': 1,  '_id': 0})
+        property_details = current_app.db.properties.find_one({'_id': ObjectId(receiver['property_id'])}, {'address': 1, 'images': 1,  '_id': 0, 'baths':1, 'beds': 1, 'price': 1, 'size': 1})
         receiver['property_address'] = property_details['address'] if property_details else None
         receiver['property_images'] = property_details['images'] if property_details else None
+        receiver['property_price'] = property_details['price'] if property_details else None
+        receiver['beds'] = property_details['beds'] if property_details else None
+        receiver['baths'] = property_details['baths'] if property_details else None
+        receiver['property_size'] = property_details['size'] if property_details else None
         receiver['email'] = other_user.get('email') if other_user else None
         receiver['first_name'] = other_user.get('first_name') if other_user else None
         receiver['last_name'] = other_user.get('last_name') if other_user else None
@@ -387,16 +395,17 @@ def validate_property_status(property_status):
     valid_statuses = ['For Sale', 'Pending', 'Sold']
     return property_status in valid_statuses
 
+from firebase_admin import exceptions 
 
 def send_notification(device_token):
     try:
-        # Path to your Firebase Admin SDK credentials
-        cred = credentials.Certificate('/home/local/API/airebroker-firebase-adminsdk-er6ol-27eb6bb50a.json')
-        firebase_admin.initialize_app(cred)
+        # Check if Firebase is already initialized
+        if not firebase_admin._apps:
+            cred = credentials.Certificate('/home/local/API/airebroker-firebase-adminsdk-er6ol-27eb6bb50a.json')
+            firebase_admin.initialize_app(cred)
 
-        message_body = "New message Received"
+        message_body = "New message received"
 
-        # Construct the message
         message = messaging.Message(
             notification=messaging.Notification(
                 title='Notification',
@@ -405,8 +414,17 @@ def send_notification(device_token):
             token=device_token,
         )
 
-        # Send the notification message
         response = messaging.send(message)
         return {"success": "Notification sent", "response": response}
+    except exceptions.FirebaseError as e:
+        # Handle specific Firebase errors
+        return {"error": str(e), "detail": "Check if the device token is valid and associated with the correct Firebase project."}
     except Exception as e:
+        # Handle any other exceptions
         return {"error": str(e)}
+    
+
+def save_archived_message(chat_message):
+    # Save the archived message only in the 'archived_messages' collection
+    current_app.db.archived_messages.insert_one(chat_message)
+    

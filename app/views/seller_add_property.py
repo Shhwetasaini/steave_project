@@ -1,4 +1,3 @@
-# In myapp/views.py
 import base64
 import phonenumbers
 import logging
@@ -17,7 +16,7 @@ from flask_jwt_extended import get_jwt_identity
 from app.services.authentication import custom_jwt_required, log_action
 from app.services.admin import log_request
 from flask.views import MethodView
-
+from bson.errors import InvalidId 
 
 from app.services.properties import (
     create_property,
@@ -119,7 +118,11 @@ class PropertyTypeSelectionView(MethodView):
             "kitchen_features": data.get('kitchen_features', []),
             "features": data.get('features', []),
             "type_and_styles": data.get('type_and_styles', []),
-            "materials": data.get('materials', [])
+            "materials": data.get('materials', []),
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
+            "available_viewing_times": data.get('available_viewing_times', []),
+            "open_house_times": data.get('open_house_times', [])
         }       
 
         property_id = create_property(property_data)
@@ -154,6 +157,147 @@ class PropertyTypeSelectionView(MethodView):
         return jsonify({'message':'data saved successfully.', 'transaction_id': transaction_id}), 201
 
 
+class PropertyTourView(MethodView):
+    decorators = [custom_jwt_required()]
+
+    def post(self):
+        log_request()
+        current_user = get_jwt_identity()
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        user_role = user.get('role')
+        if user_role == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 401
+
+        data = request.json
+        property_id = data.get('property_id')
+        tour_request_data = data.get('request_tour')
+
+        try:
+            requester_name = tour_request_data.get('requester_name')
+            requester_id = tour_request_data.get('requester_id')
+            requested_datetime = datetime.fromisoformat(tour_request_data.get('requested_datetime'))
+
+            property_details = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
+            if not property_details:
+                return jsonify({'error': 'Property not found'}), 404
+
+            # Fetch owner information from the transaction collection using property_id
+            transaction_info = current_app.db.transaction.find_one({'property_data.property_id': property_id})
+            if not transaction_info:
+                return jsonify({'error': 'Transaction information not found'}), 404
+
+            owner_info = transaction_info['user_info']
+            open_house_times = property_details.get('open_house_times', [])
+            if requested_datetime in open_house_times:
+                return jsonify({'error': 'Requested time overlaps with an open house event'}), 400
+
+            owner_email = owner_info['email']
+
+            subject = 'Property Tour Request'
+            message = (f"Request for tour on {requested_datetime} from {requester_name} ({requester_id}).")
+            status_code, response = send_email(subject, message, owner_email)
+
+            if status_code == 400:
+                return jsonify({'error': response['error']}), 400
+
+            return jsonify({'message': 'Tour request sent successfully'}), 200
+
+        except Exception as e:
+            return jsonify({'error': str(e)}), 400
+
+    def put(self):
+        log_request()
+        current_user = get_jwt_identity()
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        user_role = user.get('role')
+        if user_role == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 401
+
+        data = request.json
+        property_id = data.get('property_id')
+        available_times = data.get('available_viewing_times', [])
+        open_house_times = data.get('open_house_times', [])
+
+        try:
+            available_times = [datetime.fromisoformat(time) for time in available_times]
+            open_house_times = [datetime.fromisoformat(time) for time in open_house_times]
+        except ValueError:
+            return jsonify({'error': 'Invalid datetime format in available_viewing_times or open_house_times'}), 400
+
+        property_details = current_app.db.properties.find_one({'_id': ObjectId(property_id)})
+
+        if not property_details:
+            return jsonify({'error': 'Property not found'}), 404
+
+        current_app.db.properties.update_one(
+            {'_id': ObjectId(property_id)},
+            {'$set': {
+                'available_viewing_times': available_times,
+                'open_house_times': open_house_times,
+                'updated_at': datetime.now()
+            }}
+        )
+
+        return jsonify({'message': 'Available viewing times and open house times updated successfully'}), 200
+        
+    def get(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        user_role = user.get('role')
+        if user_role == 'realtor':
+            return jsonify({'error': 'Unauthorized access'}), 401
+
+        property_id = request.json.get('property_id')
+
+        if not property_id:
+            return jsonify({'error': 'Property ID is required'}), 400
+
+        try:
+            property_id = ObjectId(property_id)
+        except InvalidId:
+            return jsonify({'error': 'Invalid Property ID format'}), 400
+
+        property_details = current_app.db.properties.find_one({'_id': property_id})
+
+        if not property_details:
+            return jsonify({'error': 'Property not found'}), 404
+
+        # Extract available viewing times and open house times
+        available_viewing_times = property_details.get('available_viewing_times', [])
+        open_house_times = property_details.get('open_house_times', [])
+
+        return jsonify({
+            'property_id': str(property_id),
+            'available_viewing_times': available_viewing_times,
+            'open_house_times': open_house_times
+        }), 200
+    
 class PropertyUploadImageView(MethodView):
     decorators = [custom_jwt_required()]
 
@@ -171,21 +315,19 @@ class PropertyUploadImageView(MethodView):
 
         data = request.form
         transaction_id = data.get('transaction_id')
-        labels = request.form.getlist('labels')
         images = request.files.getlist("images")
         
-
-        if not transaction_id or not labels:
-            return jsonify({'error':'Missing transacion_id or label'}), 400
+        if not transaction_id:
+            return jsonify({'error':'Missing transaction_id'}), 400
         
-        if len(labels) != len(images):
-            return jsonify({'error': "label and images should be same length"}), 400
-        
+        if not images:
+            return jsonify({'error': "No images provided"}), 400
+       
         transaction_data = current_app.db.transaction.find_one({"_id": ObjectId(transaction_id)})
         if not transaction_data:
             return jsonify({'error':'Invalid Transaction'}), 400
         
-        #Check for incorrect or used transaction
+        # Check for incorrect or used transaction
         existing_transaction = current_app.db.property_seller_transaction.find_one(
             {
              'transaction_id': transaction_id, 
@@ -193,13 +335,13 @@ class PropertyUploadImageView(MethodView):
             }
         )
         if existing_transaction:
-            return jsonify({'error':'Invalid transaction, transaction already exist for this property'}), 400
+            return jsonify({'error':'Invalid transaction, transaction already exists for this property'}), 400
         
         uploaded_images = 0
         image_urls = []
         if images:
             try:
-                for label,image in zip(labels,images):
+                for image in images:
                     # Save image and get URL
                     org_filename = secure_filename(image.filename)
                     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -222,11 +364,11 @@ class PropertyUploadImageView(MethodView):
                             filename
                         )
                     )
-                    image_urls.append({'label': label, 'name': filename, 'image_url': image_url})
+                    image_urls.append({'name': filename, 'image_url': image_url})
                 
                 current_app.db.properties.update_one(
                     {"_id": ObjectId(transaction_data['property_data']['property_id'])},
-                    {"$set": {"images": image_urls}}
+                    {"$set": {"images": image_urls, "updated_at": datetime.now()}}, 
                 )
                 current_app.db.transaction.update_one(
                     {"_id": ObjectId(transaction_id)},
@@ -236,15 +378,15 @@ class PropertyUploadImageView(MethodView):
                 
             except Exception as e:
                 logger.error(f"Error Uploading property images: {str(e)}")
-                return jsonify({'error':'Failed to upload image'}), 400
+                return jsonify({'error':'Failed to upload images'}), 400
             
         payload = {
-            "transaction_id":transaction_id, 
+            "transaction_id": transaction_id, 
             "property_id": transaction_data['property_data']['property_id'], 
             "images": image_urls
         }
-        log_action(user['uuid'],user['role'], "added-property-images", payload)
-        return jsonify({'message':'data saved successfully.', 'uploaded_images':uploaded_images}), 200
+        log_action(user['uuid'], user['role'], "added-property-images", payload)
+        return jsonify({'message':'Data saved successfully.', 'uploaded_images': uploaded_images}), 200
 
 
 class SavePdfView(MethodView):

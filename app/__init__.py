@@ -23,7 +23,7 @@ def create_app(config_name):
     CORS(app, supports_credentials=True)
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
-
+    
     jwt.init_app(app)
     app.logger.setLevel(logging.INFO) 
 
@@ -58,81 +58,98 @@ def create_app(config_name):
 
 
     def on_message(client, userdata, msg):
-        payload = json.loads(msg.payload)
+        try:
+            print(f"Received message on topic {msg.topic} with payload: {msg.payload.decode()}")
 
-        if payload.get('key')== 'buyer_seller_messaging':
             try:
-                payload.pop('key')
-                payload['message_content'][0]['timestamp'] =  datetime.datetime.now()
-                # Extract sender_id and buyer_id from data
-                buyer_id = payload.get('buyer_id')
-                seller_id = payload.get('seller_id')
-                property_id = payload.get('property_id')
+                payload = json.loads(msg.payload)
+                print("JSON payload successfully decoded.")
 
-                # Check if a document already exists with the given sender_id and buyer_id
-                existing_message = app.db.buyer_seller_messaging.find_one({
-                    'buyer_id': buyer_id,
-                    'seller_id': seller_id,
-                    'property_id': property_id
-                })
+                # Debugging: Check if the key is present in the payload
+                if 'key' in payload:
+                    print(f"Payload key: {payload['key']}")
 
-                if existing_message:
-                    # If a document already exists, update it by pushing the new message content
-                    app.db.buyer_seller_messaging.update_one(
-                        {'_id': existing_message['_id']},
-                        {'$push': {'message_content': payload['message_content'][0]}}
-                    )
+                if payload.get('key') == 'buyer_seller_messaging':
+                    print("Processing buyer_seller_messaging payload...")
+                    try:
+                        payload.pop('key')
+                        payload['message_content'][0]['timestamp'] = datetime.datetime.now()
+                        buyer_id = payload.get('buyer_id')
+                        seller_id = payload.get('seller_id')
+                        property_id = payload.get('property_id')
+
+                        existing_message = app.db.buyer_seller_messaging.find_one({
+                            'buyer_id': buyer_id,
+                            'seller_id': seller_id,
+                            'property_id': property_id
+                        })
+
+                        if existing_message:
+                            app.db.buyer_seller_messaging.update_one(
+                                {'_id': existing_message['_id']},
+                                {'$push': {'message_content': payload['message_content'][0]}}
+                            )
+                            print("Updated existing buyer_seller_messaging document.")
+                        else:
+                            app.db.buyer_seller_messaging.insert_one(payload)
+                            print("Inserted new buyer_seller_messaging document.")
+                    except Exception as e:
+                        print("Error in saving buyer_seller_message:", str(e))
+
+                elif payload.get('key') == 'user-customer_service-property-chat':
+                    print("Processing user-customer_service-property-chat payload...")
+                    try:
+                        payload.pop('key')
+                        payload['message_content'][0]['timestamp'] = datetime.datetime.now()
+                        existing_document = app.db.users_customer_service_property_chat.find_one({
+                            'user_id': payload['user_id'], 
+                            'property_id': payload['property_id']
+                        })
+                        if existing_document:
+                            app.db.users_customer_service_property_chat.update_one(
+                                {'_id': existing_document['_id']},
+                                {'$push': {'message_content': payload['message_content'][0]}}
+                            )
+                            print("Updated existing user-customer_service-property-chat document.")
+                        else:
+                            app.db.users_customer_service_property_chat.insert_one(payload)
+                            print("Inserted new user-customer_service-property-chat document.")
+                    except Exception as e:
+                        print("Error in saving user message:", str(e))
+
                 else:
-                    # If no document exists, insert a new one
-                    app.db.buyer_seller_messaging.insert_one(payload)
-            except Exception as e:
-                print("Error in saving buyer_seller_message:", str(e))
-                
-        elif payload.get('key')== 'user-customer_service-property-chat':
-            try:
-                payload.pop('key')
-                payload['message_content'][0]['timestamp'] = datetime.datetime.now()
-                existing_document = app.db.users_customer_service_property_chat.find_one({
-                    'user_id': payload['user_id'], 
-                    'property_id':  payload['property_id']
-                })
-                if existing_document:
-                    app.db.users_customer_service_property_chat.update_one(
-                        {'_id': existing_document['_id']}, 
-                        {'$push': {'message_content': payload['message_content'][0]}
-                    })
-                else:
-                    app.db.users_customer_service_property_chat.insert_one(payload)
-            except Exception as e:
-                print("Error in saving user message:", str(e))
-           
-        else:
-            try:
-                payload['message_content'][0]['timestamp'] = datetime.datetime.now()
-             
-                existing_document = app.db.messages.find_one({'user_id': payload['user_id']})
+                    print("Processing general message payload...")
+                    try:
+                        payload['message_content'][0]['timestamp'] = datetime.datetime.now()
+                        existing_document = app.db.messages.find_one({'user_id': payload['user_id']})
 
-                if existing_document:
-                    app.db.messages.update_one({'user_id': payload['user_id']}, {'$push': {'messages': payload['message_content'][0]}})
-                else:
-                    messages = payload['message_content']
-                    payload.pop('message_content')
-                    payload['messages'] = messages
-                    app.db.messages.insert_one(payload)
-            except Exception as e:
-                print("Error in saving user message:", str(e))
-
+                        if existing_document:
+                            app.db.messages.update_one({'user_id': payload['user_id']}, {'$push': {'messages': payload['message_content'][0]}})
+                            print("Updated existing message document.")
+                        else:
+                            messages = payload['message_content']
+                            payload.pop('message_content')
+                            payload['messages'] = messages
+                            app.db.messages.insert_one(payload)
+                            print("Inserted new message document.")
+                    except Exception as e:
+                        print("Error in saving user message:", str(e))
+            except json.JSONDecodeError:
+                print("Failed to decode JSON payload.")
+        except Exception as e:
+            print(f"Error in on_message: {str(e)}")
+    
     
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
     mqtt_client.connect(Config.MQTT_BROKER_ADDRESS, 1883)
     mqtt_client.loop_start()  # Start the MQTT client loop
-    
+
 
     @app.after_request
     def add_security_headers(response):
         response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        response.headers['X-Frame-Options'] = 'ALLOW-FROM https://papi.airebrokers.com'
         response.headers['X-XSS-Protection'] = '1; mode=block'
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
         return response

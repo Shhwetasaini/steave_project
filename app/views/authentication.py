@@ -1,14 +1,21 @@
 from datetime import datetime
 import hashlib
+import logging
 import uuid
 import os
+from jwt import DecodeError, InvalidTokenError
 import phonenumbers
 
 from email_validator import validate_email, EmailNotValidError
 from flask.views import MethodView
 from flask import jsonify, request, url_for
 from flask import current_app
-from flask_jwt_extended import create_access_token, get_jwt_identity, get_jwt
+from flask_jwt_extended import (create_access_token,create_refresh_token, 
+        get_jwt_identity, get_jwt, set_access_cookies, verify_jwt_in_request, jwt_required)
+import hashlib
+from datetime import timedelta
+
+import requests
 from werkzeug.utils import secure_filename
 
 from app.services.admin import log_request
@@ -25,49 +32,54 @@ class RegisterUserView(MethodView):
         log_request()
 
         # Determine content type and parse data accordingly
-        
         if not request.is_json:
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
-        
+
         data = request.json
-     
         uuid_val = str(uuid.uuid4())
         first_name = data.get('first_name', None)
         last_name = data.get('last_name', None)
         email = data.get('email', None)
         phone = data.get('phone', None)
         facebook = data.get('facebook', None)
+        google = data.get('google', None)
         gmail = data.get('gmail', None)
         linkedin = data.get('linkedin', None)
         password = data.get('password', None)
-        role = data.get('role', None)
-        if not role:
-            role = None
+        role = data.get('role', None) or None
 
-        if not all([uuid_val, password, email, phone, first_name, last_name]):
-            return jsonify({"error": "uuid, password, email, phone, first_name or last_name is missing!"}), 400  # Bad Request
+        # Ensure essential fields are present
+        if not all([uuid_val, email, first_name, last_name]):
+            return jsonify({"error": "uuid, email, first_name, or last_name is missing!"}), 400  # Bad Request
 
         if role and role not in ['realtor']:
             return jsonify({"error": "Invalid user role!"}), 400  # Bad Request
 
-        # Validate email using email_validator
+        # Validate email
         try:
             validate_email(email)
         except EmailNotValidError:
             return jsonify({"error": "Invalid email format!"}), 400  # Bad Request
 
-        # Validate phone number
-        try:
-            parsed_number = phonenumbers.parse(phone, None)
-            if not phonenumbers.is_valid_number(parsed_number):
-                return jsonify({"error": "Invalid phone number."}), 400  # Bad Request
-        except phonenumbers.phonenumberutil.NumberParseException:
-            return jsonify({"error": "Invalid phone number format."}), 400  # Bad Request
-        except ValueError:
-            return jsonify({"error": "Invalid phone number."}), 400  # Bad Request
+        # Validate phone number if provided
+        formatted_phone = None
+        if phone:
+            try:
+                parsed_number = phonenumbers.parse(phone, None)
+                if not phonenumbers.is_valid_number(parsed_number):
+                    return jsonify({"error": "Invalid phone number."}), 400  # Bad Request
+                formatted_phone = phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
+            except (phonenumbers.phonenumberutil.NumberParseException, ValueError):
+                return jsonify({"error": "Invalid phone number format."}), 400  # Bad Request
 
-        formatted_phone = phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
+        # Check if user already exists
+        query = {"$or": [{"uuid": uuid_val}, {"email": email}]}
+        existing_user = current_app.db.users.find_one(query)
 
+        if existing_user:
+            return jsonify({'error': 'User already exists'}), 409  # Conflict
+
+        # Prepare new user data
         new_user = {
             'uuid': uuid_val,
             'first_name': first_name,
@@ -76,20 +88,21 @@ class RegisterUserView(MethodView):
             'phone': formatted_phone,
             'role': role,
             'facebook': facebook,
+            'google': google,
             'gmail': gmail,
             'linkedin': linkedin,
             'profile_pic': None,
-            'password': hashlib.sha256(password.encode("utf-8")).hexdigest(),
-            'is_verified': False,
+            'password': hashlib.sha256(password.encode("utf-8")).hexdigest() if password else None,
+            'is_verified': bool(facebook or google),  # Automatically verified for Facebook or Google logins
             'liked_properties': [],
             'device_token': None
         }
 
-        query = {"$or": [{"uuid": uuid_val}, {"email": email}]}
-        existing_user = current_app.db.users.find_one(query)
+        # Insert new user into the database
+        current_app.db.users.insert_one(new_user)
 
-        if not existing_user:
-            current_app.db.users.insert_one(new_user)
+        # For non-social logins, generate and send OTP
+        if not (facebook or google):
             otp = generate_otp()
             current_time = datetime.now()
             current_app.db.users.update_one(
@@ -98,52 +111,75 @@ class RegisterUserView(MethodView):
                 upsert=True
             )
             send_otp_via_email(new_user['email'], otp, subject='OTP for user verification')
-            new_user.pop('_id')
-            log_action(new_user['uuid'], new_user['role'], "registration", new_user)
-            return jsonify(
-                {
-                    'message': 'User registered successfully, OTP has been sent on email Please verify it.'
-                }
-            ), 201  # Created
-        else:
-            return jsonify({'error': 'User already exists'}), 409  # Conflict
 
+        new_user.pop('_id')
+        log_action(new_user['uuid'], new_user['role'], "registration", new_user)
+
+        return jsonify({
+            'message': 'User registered successfully' + (
+                ', OTP has been sent to email. Please verify it.' if not (facebook or google) else ''
+            )
+        }), 201  # Created
 
 class LoginUserView(MethodView):
     def post(self):
         log_request()
 
-        # Determine content type and parse data accordingly
         if not request.is_json:
             return jsonify({"error": "Unsupported Content Type"}), 415  # Unsupported Media Type
         data = request.json
 
         email = data.get('email')
         password = data.get('password')
+        facebook = data.get('facebook')
+        google = data.get('google')
+        remember_me = data.get('remember_me', False)  # Defaults to False if not provided
 
-        if not email or not password:
-            return jsonify({"error": "Email or password is missing!"}), 400  # Bad Request
+        if not email:
+            return jsonify({"error": "Email is missing!"}), 400  # Bad Request
 
         user = current_app.db.users.find_one({'email': email})
 
         if user:
-            if not user['is_verified']:
+            if not user['is_verified'] and not (facebook or google):
                 return jsonify({'error': 'Verify user to login!'}), 403  # Forbidden
             if user['role'] == "superuser":
                 return jsonify({"error": "You are not allowed to login here"}), 403  # Forbidden
 
-            encrypted_password = hashlib.sha256(password.encode("utf-8")).hexdigest()
-            if encrypted_password == user['password']:
-                access_token = create_access_token(identity=email)
-                data['password'] = encrypted_password
-                log_action(user['uuid'], user['role'], "email-login", data)
-                return jsonify({"message": "User logged in successfully!", "access_token": access_token}), 200  # OK
+            if facebook or google:
+                # For Facebook or Google login, skip password check
+                authenticated = True
+            else:
+                encrypted_password = hashlib.sha256(password.encode("utf-8")).hexdigest()
+                authenticated = encrypted_password == user['password']
+
+            if authenticated:
+                expires_delta = timedelta(days=30) if remember_me else timedelta(hours=1)
+                access_token = create_access_token(identity=email, expires_delta=expires_delta)
+                refresh_token = create_refresh_token(identity=email)
+
+                # Include user information in the response
+                user_info = {
+                    "uuid": user.get("uuid"),
+                    "first_name": user.get("first_name"),
+                    "last_name": user.get("last_name"),
+                    "email": user.get("email"),
+                    "phone": user.get("phone"),
+                    "role": user.get("role"),
+                }
+
+                log_action(user['uuid'], user['role'], "social-login" if (facebook or google) else "email-login", data)
+
+                response = jsonify({"message": "User logged in successfully!", "access_token": access_token, "refresh_token": refresh_token, "user_info": user_info})
+                set_access_cookies(response, access_token)
+
+                return response, 200  # OK
             else:
                 return jsonify({'error': 'Email or password is incorrect!'}), 401  # Unauthorized
 
         return jsonify({'error': 'User does not exist, please register the user!'}), 404  # Not Found
-
-
+    
+    
 class UserUuidLoginView(MethodView):
     def post(self):
         log_request()
@@ -325,7 +361,6 @@ class UpdateUsersView(MethodView):
             return jsonify({'error': 'User not found or no fields to update!'}), 404  # Not Found
     
 
-
 class ForgetPasswdView(MethodView):
     def post(self):
         if not request.is_json:
@@ -412,3 +447,103 @@ class VerifyOtpView(MethodView):
                 return jsonify({'error': 'OTP has expired or already used'}), 400  # Bad Request
         else:
             return jsonify({'error': 'Invalid OTP or Email'}), 400  # Bad Request
+
+class ValidateTokenView(MethodView):
+    
+    def get(self):
+        log_request()
+        try:
+            
+            verify_jwt_in_request()
+            current_user = get_jwt_identity()
+            jwt_claims = get_jwt()
+
+            
+            token_info = {
+                "valid": True,
+                "message": "Token is valid",
+                "user_identity": current_user,
+                "token_claims": jwt_claims,  
+                "expires_at": jwt_claims.get("exp", None),
+                "issued_at": jwt_claims.get("iat", None),  
+                "jti": jwt_claims.get("jti", None)  
+            }
+
+            return jsonify(token_info), 200
+
+        except DecodeError:
+            return jsonify({
+                "valid": False,
+                "error": "Invalid token format"
+            }), 401  
+
+        except InvalidTokenError:
+            return jsonify({
+                "valid": False,
+                "error": "Token has expired or is invalid!"
+            }), 401  
+
+        except Exception as e:
+            logging.error(f"Token validation error: {str(e)}")
+            return jsonify({
+                "valid": False,
+                "error": str(e)
+            }), 401  
+         
+class RefreshTokenView(MethodView):
+    decorators = [jwt_required(refresh=True)]
+
+    def get(self):
+        log_request()
+        try:
+            current_user = get_jwt_identity()
+            new_access_token = create_access_token(identity=current_user)
+            new_refresh_token = create_refresh_token(identity=current_user)
+            return jsonify({
+                "access_token": new_access_token,
+                "refresh_token": new_refresh_token
+            }), 200
+        except Exception as e:
+            logging.error(f"Error during token refresh: {str(e)}")
+            return jsonify({"error": str(e)}), 401
+        
+        
+class SearchAddressAutoCompleteView(MethodView):
+    decorators = [custom_jwt_required()]        
+    
+    def get(self):
+        log_request()
+        current_user = get_jwt_identity()
+
+        try:
+            validate_email(current_user)
+            user = current_app.db.users.find_one({'email': current_user})
+        except EmailNotValidError:
+            user = current_app.db.users.find_one({'uuid': current_user})
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Extract individual query parameters from the request
+        format_type = request.args.get('format', 'json')
+        query = request.args.get('q')
+        limit = request.args.get('limit', 5)
+
+        # Validate required parameters
+        if not query:
+            return jsonify({"error": "Query parameter 'q' is required"}), 400
+
+        # Construct the URL with the separate query parameters
+        api_url = f"http://192.168.36.100/search.php?format={format_type}&q={requests.utils.quote(query)}&limit={limit}"
+
+        current_app.logger.info(f"Constructed API URL: {api_url}")
+
+        try:
+            # Make the request to the external API
+            response = requests.get(api_url)
+            response.raise_for_status()  # Raise an error for bad status codes
+        except requests.exceptions.RequestException as e:
+            current_app.logger.error(f"Request to external API failed: {e}")
+            return jsonify({"error": "External API request failed"}), 500
+
+        # Return the JSON response from the external API
+        return jsonify(response.json())

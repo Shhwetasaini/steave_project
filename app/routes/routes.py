@@ -8,7 +8,9 @@ from app.views.admin.documents import *
 from app.views.admin.messaging import *
 from app.views.admin.users import *
 from app.views.admin.context_processors import *
-
+from app.views.pre_qualified import *
+from app.views.id_verification import *
+from app.views.saved_searches import *
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -16,38 +18,44 @@ api_bp.add_url_rule(rule='/user/register', view_func=RegisterUserView.as_view('r
 api_bp.add_url_rule(rule='/user/uuid', view_func=UserUUIDView.as_view('user_uuid'))
 api_bp.add_url_rule(rule='/user/verify-otp', view_func=VerifyOtpView.as_view('verify_otp'))
 api_bp.add_url_rule(rule='/user/login', view_func=LoginUserView.as_view('login'))
+api_bp.add_url_rule(rule='/user/validate_token', view_func=ValidateTokenView.as_view('validate_token'))
+api_bp.add_url_rule(rule='/user/refresh_token', view_func=RefreshTokenView.as_view('refresh_token')) #token refresh
 api_bp.add_url_rule(rule='/user/signin', view_func=UserUuidLoginView.as_view('signin')) #for uuid login
 api_bp.add_url_rule(rule='/user/profile', view_func=ProfileUserView.as_view('profile'))
 api_bp.add_url_rule(rule='/user/logout', view_func=LogoutUserView.as_view('logout'))
 api_bp.add_url_rule(rule='/user/update', view_func=UpdateUsersView.as_view('update_user'))
 api_bp.add_url_rule(rule='/user/forgot-passwd', view_func=ForgetPasswdView.as_view('forgot_passwd'))
 api_bp.add_url_rule(rule='/user/reset-passwd', view_func=ResetPasswdView.as_view('reset_passwd'))
+api_bp.add_url_rule(rule='/search-address', view_func=SearchAddressAutoCompleteView.as_view('search-address'))
+
 
 api_bp.add_url_rule(rule='/user/check_response', view_func=CheckResponseView.as_view('check_response'))
 api_bp.add_url_rule(rule='/user/send-message', view_func=SaveUserMessageView.as_view('send_message'))
 
-# Users Media and documents
-api_bp.add_url_rule(rule='/receivemedia', view_func=ReceiveMediaView.as_view('receivemedia'))
-api_bp.add_url_rule(rule='/download-doc', view_func=DownloadDocView.as_view('document_download'))
-api_bp.add_url_rule(rule='/upload-doc', view_func=UploadDocView.as_view('document_upload'))
-api_bp.add_url_rule(rule='user/downloaded-documents', view_func=UserDownloadedDocsView.as_view('user_downloaded_document'))
-api_bp.add_url_rule(rule='user/uploaded-documents', view_func=UserUploadedDocsView.as_view('user_uploaded_document'))
-api_bp.add_url_rule(rule='/user/media', view_func=SendMediaView.as_view('users_media'))
-api_bp.add_url_rule(rule='/user/media/delete', view_func=DeleteMediaView.as_view('users_media_delete'))
-api_bp.add_url_rule(rule='/docs', view_func=AllDocsView.as_view('docs'))
-api_bp.add_url_rule(rule='/docs/filter', view_func=DocumentFilterView.as_view('docs_filter'))
-api_bp.add_url_rule(rule='/user/docs/date', view_func=UserDocsDateRangeView.as_view('user_docs_date_range'))
-api_bp.add_url_rule(rule='/docs/fill-request/<string:document_id>', view_func=DocumentFillRequestView.as_view('docs_fill_request'))
-api_bp.add_url_rule(rule='/docs/<string:document_id>', view_func=DocAnswerInsertionView.as_view('docs_answer'))
-api_bp.add_url_rule(rule='/docs/prefill-answers', view_func=DocumentPrefillAnswerView.as_view('docs_prefill_answers'))
+# Users Media and documents - user documents
+api_bp.add_url_rule(rule='/user-document/download', view_func=DownloadDocView.as_view('document_download_post')) #user documents
+api_bp.add_url_rule(rule='/user-document/download', view_func=UserDownloadedDocsView.as_view('user_downloaded_document_get')) #user documents
+api_bp.add_url_rule(rule='/user-document/filter', view_func=UserDocumentsView.as_view('user_uploaded_documents')) #user documents
+api_bp.add_url_rule(rule='/user-document', view_func=UploadDocView.as_view('document_upload_post')) #user documents
+api_bp.add_url_rule(rule='/user-document/<string:doc_id>', view_func=UploadDocView.as_view('document_delete_put')) #user documents
 
+# Users Media and documents - Templates
+api_bp.add_url_rule(rule='/template-docs', view_func=AllDocsView.as_view('docs')) #templates
+api_bp.add_url_rule(rule='/template-docs/<string:document_id>', view_func=DocumentFillRequestView.as_view('docs_fill_request')) #Templates
+api_bp.add_url_rule(rule='/template-docs/answer/<string:document_id>', view_func=DocAnswerInsertionView.as_view('docs_answer-get-post')) #Templates
+api_bp.add_url_rule(rule='/template-docs', view_func=DocumentPrefillAnswerView.as_view('docs_prefill_answers')) #Templates
 
+#media
+api_bp.add_url_rule(rule='/media', view_func=SendMediaView.as_view('users_media')) #media
+api_bp.add_url_rule(rule='/media', view_func=DeleteMediaView.as_view('users_media_delete')) #media
+api_bp.add_url_rule(rule='/media', view_func=ReceiveMediaView.as_view('receivemedia')) #media
 
 #Properties
 api_bp.add_url_rule(rule='user/properties/add/property-type-selection', view_func=PropertyTypeSelectionView.as_view('property_type_selection'))
 api_bp.add_url_rule(rule='user/properties/add/upload-image', view_func=PropertyUploadImageView.as_view('property_images'))
 api_bp.add_url_rule(rule='user/properties/add/save-pdf', view_func=SavePdfView.as_view('save_pdf'))
 api_bp.add_url_rule(rule='user/properties/add/checkout', view_func=CheckoutView.as_view('property_checkout'))
+api_bp.add_url_rule(rule='user/properties/add/property-tour', view_func=PropertyTourView.as_view('property_tour'))
 
 api_bp.add_url_rule(rule='user/properties/list', view_func=SellerPropertyListView.as_view('user_properties_list'))   #individual seller properties
 api_bp.add_url_rule(rule='user/properties', view_func=AllPropertyListView.as_view('user_properties'))
@@ -57,7 +65,7 @@ api_bp.add_url_rule(rule='user/properties/image/label', view_func=PropertyImageL
 api_bp.add_url_rule(rule='user/properties/add/external', view_func=ExternalPropertyAddView.as_view('user_properties_add_external'))
 api_bp.add_url_rule(rule='user/properties/panoramic_images', view_func=PanoramicImageView.as_view('user_properties_add_panoramic_images'))
 api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>', view_func=PanoramicImageView.as_view('user_properties_get_panoramic_images'))
-api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>/<int:property_version>/<int:order>', view_func=PanoramicImageView.as_view('user_properties_delete_panoramic_images'))
+api_bp.add_url_rule(rule='user/properties/panoramic_images/<string:property_id>/<int:property_version>/<int:order>', view_func=PanoramicImageView.as_view('user_properties_delete_panoramic_images')) #method for delete
 api_bp.add_url_rule(rule='user/properties/search', view_func=PropertySearchFilterView.as_view('user_property_search'))
 api_bp.add_url_rule(rule='user/properties/mobile_search', view_func=PropertySearchFilterMobileView.as_view('user_property_mobile_search'))
 api_bp.add_url_rule(rule='user/properties/favorite', view_func=FavoritePropertyView.as_view('user_property_favorite'))
@@ -103,3 +111,20 @@ api_bp.add_url_rule(rule='/users/buyer/seller/chat/search', view_func=BuyerSelle
 api_bp.add_url_rule(rule='/users/customer/property/chat', view_func=UserCustomerServicePropertySendMesssageView.as_view('user-customer-service_chat'), methods=['POST'])
 api_bp.add_url_rule(rule='/users/customer/property/chat/<property_id>', view_func=UserCustomerServicePropertySendMesssageView.as_view('user-customer-service_message'), methods=['GET'])
 api_bp.add_url_rule(rule='/users/customer/property/chat/list', view_func=UserCustomerServicePropertyChatUserList.as_view('user_customer_property_chat_list'))
+
+# Routes for fre-qualified 
+api_bp.add_url_rule('/timeline_homebuying_stage', view_func=PrequalView.as_view('timeline_homebuying_stage'), methods=['POST'])
+api_bp.add_url_rule('/home_use_type', view_func=PrequalView.as_view('home_use_type'), methods=['POST'])
+api_bp.add_url_rule('/income_employment_details', view_func=PrequalView.as_view('income_employment_details'), methods=['POST'])
+api_bp.add_url_rule('/personal_info', view_func=PrequalView.as_view('personal_info'), methods=['POST'])
+api_bp.add_url_rule('/budget_details', view_func=PrequalView.as_view('budget_details'), methods=['POST'])
+api_bp.add_url_rule('/budget_detail', view_func=PrequalView.as_view('budget_detail'), methods=['POST'])
+api_bp.add_url_rule('/credit_score_estimate', view_func=PrequalView.as_view('credit_score'), methods=['POST'])
+
+
+# Idverifications
+api_bp.add_url_rule(rule='/id-verification',view_func=IDVerificationView.as_view('id_verification'),methods=['POST'])
+
+#saved search 
+api_bp.add_url_rule('/saved_searches', view_func=SavedSearchView.as_view('saved_searches'), methods=['GET', 'POST'])
+api_bp.add_url_rule('/saved_searches/<string:search_id>', view_func=SavedSearchView.as_view('saved_search'), methods=['GET', 'PUT', 'DELETE'])
