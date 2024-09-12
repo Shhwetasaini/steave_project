@@ -10,7 +10,6 @@ from geopy.geocoders import GoogleV3
 from email_validator  import validate_email, EmailNotValidError
 from bson import ObjectId
 from werkzeug.utils import secure_filename
-
 from flask import session, current_app, request, jsonify, url_for
 from flask_jwt_extended import get_jwt_identity
 from app.services.authentication import custom_jwt_required, log_action
@@ -463,6 +462,7 @@ class SavePdfView(MethodView):
             doc_url = url_for('serve_media', filename=os.path.join('Home','sign', unique_filename))
 
             document_data = {
+                'doc_id': str(ObjectId()),
                 'user_name':user.get('first_name') +" "+ user.get('last_name'),
                 'property_name':transaction.get('property_data').get('name'),
                 'property_address':transaction.get('property_data').get('address'),
