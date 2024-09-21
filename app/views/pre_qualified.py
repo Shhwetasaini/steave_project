@@ -172,8 +172,14 @@ class PrequalView(MethodView):
         employment_info= data.get('employment_info') 
         employment_title = data.get('employment_title')
         employment_status = data.get('employment_status')
+        salary_of_hourly_wage = data.get('salary_of_hourly_wage')
+        gross_income = data.get('gross_income')
+        net_income = data.get('net_income')
+        annual_income = data.get('annual_income')
+        current_debets = data.get('current_debets')
+        monthly_expenses = data.get('monthly_expenses')
 
-        us_citizen = data.get('us_citizen')
+        us_citizen = data.get('are_you_us_citizen')
         foreclosure_history = data.get('foreclosure_history')
         bankruptcy_history = data.get('bankruptcy_history')
 
@@ -196,9 +202,15 @@ class PrequalView(MethodView):
                         'employment_info': employment_info,
                         'employment_title':employment_title,
                         'employment_status':employment_status,
-                        'us_citizen': us_citizen,
+                        'are_you_us_citizen': us_citizen,
                         'foreclosure_history': foreclosure_history,
-                        'bankruptcy_history': bankruptcy_history
+                        'bankruptcy_history': bankruptcy_history,
+                        'salary_of_hourly_wage':salary_of_hourly_wage,
+                        'gross_income' :gross_income,
+                        'net_income' :net_income,
+                        'annual_income' :annual_income,
+                        'current_debets' :current_debets,
+                        'monthly_expenses':monthly_expenses
                     }
                 }},
                 upsert=True
@@ -213,9 +225,15 @@ class PrequalView(MethodView):
                         'employment_info': employment_info,
                         'employment_title':employment_title,
                         'employment_status':employment_status,
-                        'us_citizen': us_citizen,
+                        'are_you_us_citizen': us_citizen,
                         'foreclosure_history': foreclosure_history,
-                        'bankruptcy_history': bankruptcy_history
+                        'bankruptcy_history': bankruptcy_history,
+                        'salary_of_hourly_wage':salary_of_hourly_wage,
+                        'gross_income' :gross_income,
+                        'net_income' :net_income,
+                        'annual_income' :annual_income,
+                        'current_debets' :current_debets,
+                        'monthly_expenses':monthly_expenses
                     }
                 }
             }), 200

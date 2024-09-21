@@ -434,8 +434,8 @@ class PanoramicImageView(MethodView):
         if panoramic_images:
             existing_versions = [pano.get('property_version') for pano in panoramic_images]
             max_version = max(existing_versions)
-            if property_version != max_version + 1:
-                return jsonify({"error": f"Invalid property_version value. Next version should be {max_version + 1}."}), 400
+            # if property_version != max_version+1:
+            #     return jsonify({"error": f"Invalid property_version value. Next version should be {max_version+1}."}), 400
         else:
             if property_version != 1:
                 return jsonify({"error": "Invalid property_version value. First version should be 1."}), 400
@@ -448,11 +448,13 @@ class PanoramicImageView(MethodView):
             current_orders = [img['order'] for img in property_version_images.get('3d_images', [])]
             if current_orders:
                 max_order = max(current_orders)
-                if order != max_order + 1:
+                # Allow updating an existing image for the same order
+                if order not in current_orders and order != max_order + 1:
                     return jsonify({"error": f"Invalid order value. Next order should be {max_order + 1}."}), 400
             else:
                 if order != 1:
                     return jsonify({"error": "Invalid order value. First order for this version should be 1."}), 400
+
         else:
             if order != 1:
                 return jsonify({"error": "Invalid order value. First order for a new property version should be 1."}), 400
@@ -466,6 +468,13 @@ class PanoramicImageView(MethodView):
             existing_image = next(
                 (img for img in property_version_images['3d_images'] if img['room_label'] == room_label), None
             )
+            
+            # Agar room_label exist nahi karta, toh user ko prompt karo property_version badhane ke liye
+            if not existing_image:
+                return jsonify({
+                    "error": f"Room label '{room_label}' does not exist in property version {property_version}. Please increase the property_version before adding a new label."
+                }), 400
+
             if existing_image:
                 # Update existing image with the same room label
                 current_app.db.properties.update_one(
@@ -517,30 +526,40 @@ class PanoramicImageView(MethodView):
             }), 200
 
         else:
-            # Creating a new property version
-            new_property_version_images = {
-                'property_version': property_version,
-                '3d_images': [{
-                    "order": order,
-                    "room_label": room_label,
-                    "name": image_data.get('filename'),
-                    "url": image_data.get('image_url'),
-                    "geo_location_latitude": latitude,
-                    "geo_location_longitude": longitude,
-                    "uploaded_at": datetime.now(),
-                }]
-            }
-            current_app.db.properties.update_one(
-                {'_id': ObjectId(property_id)},
-                {'$push': {'panoramic_images': new_property_version_images}, "$set": {"updated_at": datetime.now()}}
+            # Creating a new property version only if it doesn't already exist
+            existing_version = current_app.db.properties.find_one(
+                {'_id': ObjectId(property_id), 'panoramic_images.property_version': property_version}
             )
 
-            log_action(user['uuid'], user['role'], "uploaded-panoramic-image", new_property_version_images)
-            return jsonify({
-                "message": "Panoramic image uploaded successfully",
-                'image_name': image_data.get('filename'),
-                'image_url': image_data.get('image_url')
-            }), 200
+            if not existing_version:
+                new_property_version_images = {
+                    'property_version': property_version,
+                    '3d_images': [{
+                        "order": order,
+                        "room_label": room_label,
+                        "name": image_data.get('filename'),
+                        "url": image_data.get('image_url'),
+                        "geo_location_latitude": latitude,
+                        "geo_location_longitude": longitude,
+                        "uploaded_at": datetime.now(),
+                    }]
+                }
+                current_app.db.properties.update_one(
+                    {'_id': ObjectId(property_id)},
+                    {'$push': {'panoramic_images': new_property_version_images}, "$set": {"updated_at": datetime.now()}}
+                )
+
+                log_action(user['uuid'], user['role'], "uploaded-panoramic-image", new_property_version_images)
+                return jsonify({
+                    "message": "Panoramic image uploaded successfully",
+                    'image_name': image_data.get('filename'),
+                    'image_url': image_data.get('image_url')
+                }), 200
+            else:
+                return jsonify({
+                    "message": "Property version already exists, please update the existing version."
+                }), 400
+
 
     def get(self, property_id): 
         log_request()
