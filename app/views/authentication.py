@@ -47,6 +47,7 @@ class RegisterUserView(MethodView):
         linkedin = data.get('linkedin', None)
         password = data.get('password', None)
         role = data.get('role', None) or None
+        device_token = data.get('device_token', None)
 
         # Ensure essential fields are present
         if not all([uuid_val, email, first_name, last_name]):
@@ -95,7 +96,7 @@ class RegisterUserView(MethodView):
             'password': hashlib.sha256(password.encode("utf-8")).hexdigest() if password else None,
             'is_verified': bool(facebook or google),  # Automatically verified for Facebook or Google logins
             'liked_properties': [],
-            'device_token': None
+            'device_token': device_token
         }
 
         # Insert new user into the database
@@ -104,6 +105,7 @@ class RegisterUserView(MethodView):
         # For non-social logins, generate and send OTP
         if not (facebook or google):
             otp = generate_otp()
+            print(f"Generated OTP: {otp}")
             current_time = datetime.now()
             current_app.db.users.update_one(
                 {'email': email},
@@ -112,7 +114,6 @@ class RegisterUserView(MethodView):
             )
             send_otp_via_email(new_user['email'], otp, subject='OTP for user verification')
 
-        new_user.pop('_id')
         log_action(new_user['uuid'], new_user['role'], "registration", new_user)
 
         return jsonify({
@@ -407,7 +408,7 @@ class ResetPasswdView(MethodView):
         if new_password != confirm_password:
             return jsonify({"error": "Both passwords must be the same"}), 400  # Bad Request
 
-        user = current_app.db.users.find_one({'email': email})       
+        user = current_app.db.users.find_one({'email': email})
 
         if user and user['otp']['value'] == otp_received:
             otp_created_at = user['otp']['time']

@@ -401,7 +401,7 @@ def send_notification(device_token):
     try:
         # Check if Firebase is already initialized
         if not firebase_admin._apps:
-            cred = credentials.Certificate('/home/local/API/airebroker-firebase-adminsdk-er6ol-27eb6bb50a.json')
+            cred = credentials.Certificate('/mnt/c/Users/91853/OneDrive/Desktop/API/airebroker-firebase-adminsdk-er6ol-27eb6bb50a.json')
             firebase_admin.initialize_app(cred)
 
         message_body = "New message received"

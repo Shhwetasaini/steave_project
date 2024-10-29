@@ -27,12 +27,22 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = datetime.timedelta(days=5)
     
     UPLOAD_FOLDER =  os.path.abspath('app/media')
-    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
-    SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
+    #MAIL_USERNAME = os.getenv('MAIL_USERNAME')
+    #SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
     STRIPE_PUBLIC_KEY = os.getenv('STRIPE_PUBLIC_KEY')
     STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
     GOOGLE_LOCATION_API_KEY = os.getenv('GOOGLE_LOCATION_API_KEY')
-    
+    FRED_API_KEY = os.getenv('FRED_API_KEY')
+    FRED_API_URL = os.getenv('FRED_API_URL')
+    FASTAPI_URL = os.getenv('FASTAPI_URL')
+    DEBUG = os.getenv('DEBUG', 'False') == 'True'
+    MAIL_SERVER = 'smtp.gmail.com'  # Gmail SMTP server
+    MAIL_PORT = 465  # Port for SSL
+    MAIL_USE_SSL = True
+    MAIL_USERNAME = 'shwetasaini250796@gmail.com'
+    MAIL_PASSWORD = 'fgln wvuf ixab vdmc'
+
+
     @staticmethod
     def init_app(app):
         pass

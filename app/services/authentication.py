@@ -73,7 +73,7 @@ def generate_otp():
     return str(random.randint(100000, 999999))
 
 
-def send_otp_via_email(email, otp, subject):
+'''def send_otp_via_email(email, otp, subject):
     message = SendGridMail(
         from_email=current_app.config['MAIL_USERNAME'],
         to_emails=email,
@@ -85,9 +85,28 @@ def send_otp_via_email(email, otp, subject):
         response = sg.send(message)
         print(response.status_code)
     except Exception as e:
-        print(str(e))
+        print(str(e))'''
 
-
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+def send_otp_via_email(email, otp, subject):
+    sender_email = current_app.config['MAIL_USERNAME']  # SMTP sender email
+    receiver_email = email  # Recipient email
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = receiver_email
+    msg['Subject'] = subject
+    # Email body content
+    body = f"Your OTP is: {otp}"
+    msg.attach(MIMEText(body, 'plain'))
+    try:
+        # SMTP connection
+        with smtplib.SMTP_SSL(current_app.config['MAIL_SERVER'], current_app.config['MAIL_PORT']) as server:
+            server.login(current_app.config['MAIL_USERNAME'], current_app.config['MAIL_PASSWORD'])  # SMTP login
+            server.sendmail(sender_email, receiver_email, msg.as_string())  # Send email
+    except Exception as e:
+        print(f"Error sending email: {str(e)}")
 
 def log_action(user_id, user_role, action, payload=None):
    # Check if the user exists in the notifications collection

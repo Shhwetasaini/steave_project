@@ -78,14 +78,20 @@ class SaveAdminResponseView(MethodView):
         from app import mqtt_client
         log_request()
         current_user = get_jwt_identity()
+        print(f"Current user: {current_user}")
         logged_in_user = current_app.db.users.find_one({'email': current_user})
+        print(f"Logged-in user: {logged_in_user}")
 
         data = request.form 
+        print(f"Request form data: {data}")
         message_id = logged_in_user['uuid']
         message = data.get('message', None)
+        print(f"Message: {message}")
         file = request.files.get('media_file', None)
+        print(f"File received: {file}")
         user_id = data.get('user_id')
         user = current_app.db.users.find_one({'uuid':user_id})
+        print(f"User found: {user}")
 
         if not user:
             return jsonify({"error": "user not found"}), 404
@@ -105,6 +111,7 @@ class SaveAdminResponseView(MethodView):
 
         if message:
             chat_message['message_content'][0]['message'] = message
+            print(f"Chat message updated with message: {chat_message}")
 
         if file and werkzeug.utils.secure_filename(file.filename):
             # Check if the file has an allowed extension
@@ -113,11 +120,15 @@ class SaveAdminResponseView(MethodView):
                 org_filename = werkzeug.utils.secure_filename(file.filename)
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 filename = f"{timestamp}_{org_filename}"
+                print(f"Generated filename: {filename}")
                 user_media_dir = os.path.join(current_app.config['UPLOAD_FOLDER'] ,'customer-support-chat',logged_in_user['uuid'],'uploaded_docs', str(user['uuid']))
+                print(f"User media directory: {user_media_dir}")
                 os.makedirs(user_media_dir, exist_ok=True)
                 user_media_path = os.path.join(user_media_dir, filename)
+                print(f"User media path: {user_media_path}")
                 file.save(user_media_path)
                 media_url = url_for('serve_media', filename=os.path.join('customer-support-chat',logged_in_user['uuid'],'uploaded_docs', str(user['uuid']), filename))
+                print(f"Media URL: {media_url}")
                 chat_message['message_content'][0]['media'] = media_url
                 document_data = {
                     'name': filename,
@@ -133,11 +144,14 @@ class SaveAdminResponseView(MethodView):
                     {'$push': {'uploaded_documents': document_data}},
                     upsert=True
                 )
+                print(f"Document data saved: {document_data}")
             else:
+                print("Invalid file type.")
                 # Handle the case where the file has an invalid extension
                 return jsonify({"error": "Invalid file type. Allowed files are: {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}"}), 400
         
         mqtt_topic = f"user_chat/{user['email']}"
+        print(f"MQTT Topic: {mqtt_topic}")
         mqtt_client.subscribe(mqtt_topic)
 
         # Publish the message to the MQTT topic
@@ -145,10 +159,13 @@ class SaveAdminResponseView(MethodView):
             topic=mqtt_topic, 
             payload=json.dumps(chat_message)
         )
+        print(f"Published message to MQTT topic: {mqtt_topic}")
 
         mqtt_client.unsubscribe(mqtt_topic)
         notify = send_notification(user.get('device_token'))
+        print(f"Notification sent: {notify}")
         if notify.get('error'):
+            print("Error sending notification.")
             return jsonify(notify), 500
         
         log_action(logged_in_user['uuid'],logged_in_user['role'], "responded-chat", chat_message)
@@ -195,16 +212,16 @@ class SavePropertyAdminResponseView(MethodView):
         data = request.form
         property_id = data.get('property_id')
         user_id = data.get('user_id')
-        property_address = data.get('property_address')
+        address = data.get('address')
         message = data.get('message',None)
         file = request.files.get('media_file',None)
         current_user = get_jwt_identity()
         
         user_admin = current_app.db.users.find_one({'email': current_user})
         user = current_app.db.users.find_one({'uuid': user_id})
-        property_details = current_app.db.properties.find_one({'_id': ObjectId(property_id) , 'property_address': property_address})
+        property_details = current_app.db.properties.find_one({'_id': ObjectId(property_id) , 'address': address})
         
-        if not property_id or not property_address:
+        if not property_id or not address:
             return jsonify({"error": "Missing property id or property address"}), 400
         
         if not message and not file:
@@ -214,7 +231,7 @@ class SavePropertyAdminResponseView(MethodView):
         chat_message = {
             'user_id': user_id,
             'property_id': property_id,
-            'property_address': property_address,
+            'address': address,
             'message_content': [
                 {
                     'message_id': user_admin['uuid'],
@@ -222,7 +239,7 @@ class SavePropertyAdminResponseView(MethodView):
                     'is_seen': False,
                 }
             ],   
-            'key':'user-customer_service-property-chat'     
+            'key':'user-customer_service-property-chat'
         }
         
         
@@ -246,7 +263,7 @@ class SavePropertyAdminResponseView(MethodView):
                     'name': filename,
                     'sender': user_admin.get('first_name') + " " + user_admin.get('last_name'),
                     'property_name': property_details.get('name'),
-                    'property_address':property_details.get('address'),
+                    'address':property_details.get('address'),
                     'url': media_url,
                     'type': "chat",
                     'uploaded_at': datetime.now()

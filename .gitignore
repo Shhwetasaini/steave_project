@@ -7,3 +7,13 @@ app/properties.json
 florida.pdf
 seller.pdf
 airebroker-firebase-adminsdk-er6ol-27eb6bb50a.json
+node_moduels/
+node_modules
+node_modules/
+poppler-22.12.0/
+package-lock.json
+package.json
+florida (1).pdf
+firebase.json
+.firebaserc
+.env.example

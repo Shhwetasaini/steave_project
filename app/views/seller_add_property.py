@@ -68,8 +68,8 @@ class PropertyTypeSelectionView(MethodView):
           return jsonify({'error': 'seller_address and property_type field is required'}), 400
         
         # Check if the address contains "US" or "United States" or "États-Unis"
-        if not re.search(r'\b(US|United States|USA|États-Unis|U\.S\.?)\b', property_address, flags=re.IGNORECASE):
-            return jsonify({'error': 'Please enter a valid address in the United States.'}), 400
+        '''if not re.search(r'\b(US|United States|USA|États-Unis|U\.S\.?)\b', property_address, flags=re.IGNORECASE):
+            return jsonify({'error': 'Please enter a valid address in the United States.'}), 400'''
         
         # Check if seller_property_address is present in e_sign_data and contains mn, minnesota, fl, or florida
         if not any(keyword in  property_address.lower() for keyword in ['mn', 'minnesota', 'fl', 'florida']):
@@ -82,45 +82,48 @@ class PropertyTypeSelectionView(MethodView):
         # Validate property_type
         valid_property_type = validate_property_type(property_type)
         if not valid_property_type:
-            return jsonify({'error': f"Invalid property_type. applicable types are: [Condo, Townhouse, Single_Family, Multifamily]"}), 400
+            return jsonify({'error': f"Invalid type. Applicable types are: [Residential Lease, Condo, Townhouse, Single_Family, Multifamily]"}), 400
         
         # Validate property_status
         if property_status is not None and property_status != '':
             valid_status = validate_property_status(property_status)
             if not valid_status:
-                return jsonify({'error': f"Invalid status. applicable status are: [For Sale, Pending, Sold, Cancelled]"}), 400
+                return jsonify({'error': f"Invalid status. applicable status are: [Active,For Sale, Pending, Sold, Cancelled]"}), 400
             
         property_data = {
             'type': property_type,
             'address': property_address,
             'images': [],
             'panoramic_images': [],
-            "name": data.get('name', None),
-            "status": property_status,
-            "construction": data.get('construction', None),
-            "state": data.get('state', None),
-            "city": data.get('city', None),
+            "City": data.get('City', None),
+            "CountyOrParish": data.get('CountyOrParish', None),
+            "InternetAddressDisplayYN": data.get('InternetAddressDisplayYN', None),
+            "ListingContractDate": data.get('ListingContractDate', None),
+            "ListingId": data.get('ListingId', None),
+            "LivingArea": float(data.get('LivingArea', 0.0) or 0.0),
+            "PostalCode": data.get('PostalCode', None),
+            "PropertySubType": data.get('PropertySubType', None),
+            "StandardStatus": property_status,
+            "StateOrProvince": data.get('StateOrProvince', None),
+            "StreetName": data.get('StreetName', None),
+            "StreetNumber": data.get('StreetNumber', None),
+            "SubdivisionName": data.get('SubdivisionName', None),
+            "TaxAnnualAmount": float(data.get('TaxAnnualAmount', 0.0) or 0.0),
+            "VirtualTourURLUnbranded": data.get('VirtualTourURLUnbranded', None),
             "latitude": float(data.get('latitude', 0.0) or 0.0),
             "longitude": float(data.get('longitude', 0.0) or 0.0),
-            "beds": int(data.get('beds', 0) or 0),
+            "appliances": data.get('appliances', []),
             "baths": int(data.get('baths', 0) or 0),
+            "beds": int(data.get('beds', 0) or 0),
+            "built_in": data.get('built_in', None),
+            "description": data.get('description', None),
+            "features": data.get('features', []),
             "full_bathrooms": int(data.get('full_bathrooms', 0) or 0),
             "half_bathrooms": int(data.get('half_bathrooms', 0) or 0),
-            "kitchen": int(data.get('kitchen', 0) or 0),
-            "description": data.get('description', None),
             "price": float(data.get('price', 0.0) or 0.0),
             "size": float(data.get('size', 0.0) or 0.0),
-            "built_in": data.get('built_in', None),
-            "attached_garage": int(data.get('attached_garage', 0) or 0),
-            "garage_size": float(data.get('garage_size', 0.0) or 0.0),
-            "appliances": data.get('appliances', []),
-            "kitchen_features": data.get('kitchen_features', []),
-            "features": data.get('features', []),
-            "type_and_styles": data.get('type_and_styles', []),
-            "materials": data.get('materials', []),
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
-            "available_viewing_times": data.get('available_viewing_times', []),
             "open_house_times": data.get('open_house_times', [])
         }       
 

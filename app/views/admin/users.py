@@ -214,7 +214,7 @@ class AdminUserLoginView(MethodView):
             if user['is_verified'] == False:
                 return jsonify({'error': 'Verify user to login!'}), 200
             if user.get('role') != 'superuser':
-                return jsonify({"error": "Only admin uers can login here"}), 400
+                return jsonify({"error": "Only admin users can login here"}), 400
             encrpted_password = hashlib.sha256(password.encode("utf-8")).hexdigest()
             if encrpted_password == user['password']:
                 access_token = create_access_token(identity=email)
