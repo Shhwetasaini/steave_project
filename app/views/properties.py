@@ -245,14 +245,15 @@ class UserPropertyView(MethodView):
             if property_data is None or property_seller_data is None:
                 return jsonify({'error': 'Property does not exists or you are not allowed to update this property'}), 401
             updatable_fields = [
-                'description', 'price', 'size',
-                'name', 'status','construction', 'address', 'state', 'city',
-                'latitude', 'longitude', 'beds', 'baths', 'kitchen',
-                'full_bathrooms', 'half_bathrooms', 'built_in', 'attached_garage',
-                'garage_size', 'appliances', 'kitchen_features', 'features',
-                'type_and_styles', 'materials'
-            ]
-
+            'name', 'description', 'price', 'size', 'kitchen', 'beds', 'baths', 'attached_garage',
+            'garage_size', 'appliances', 'kitchen_features', 'features', 'type_and_styles', 'materials',
+            'address', 'latitude', 'longitude', 'City', 'CountyOrParish', 'InternetAddressDisplayYN',
+            'ListingContractDate', 'ListingId', 'LivingArea', 'PostalCode', 'PropertySubType', 'StandardStatus',
+            'StateOrProvince', 'StreetName', 'StreetNumber', 'SubdivisionName', 'TaxAnnualAmount',
+            'VirtualTourURLUnbranded', 'baths', 'built_in', 'full_bathrooms', 'half_bathrooms', 'open_house_times',
+            'available_viewing_times', 'images', 'panoramic_images', 'construction'
+        ]
+            
             data = request.form 
             files = request.files.get('image')
             label = data.get('label', '')
