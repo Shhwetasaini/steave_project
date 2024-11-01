@@ -47,54 +47,61 @@ class PropertyTypeSelectionView(MethodView):
             user = current_app.db.users.find_one({'email': current_user})
         except EmailNotValidError:
             user = current_app.db.users.find_one({'uuid': current_user})
-        
+
         if not user:
             return jsonify({'error': 'User not found'}), 404
-        
+
         user_role = user.get('role')
         if user_role == 'realtor':
             return jsonify({'error': 'Unauthorized access'}), 401
-        
+
         data = request.json
-        property_address = data.get('seller_address',None)
-        property_type = data.get('property_type',None)
+        property_address = data.get('seller_address', None)
+        property_type = data.get('property_type', None)
         property_status = data.get('status', None)
 
-
         if not property_address or not property_type:
-            return jsonify({"error":"seller_address and property_type field is required"}), 400
+            return jsonify({"error": "seller_address and property_type field is required"}), 400
 
         if property_address.isdigit():
-          return jsonify({'error': 'seller_address and property_type field is required'}), 400
-        
-        # Check if the address contains "US" or "United States" or "États-Unis"
-        '''if not re.search(r'\b(US|United States|USA|États-Unis|U\.S\.?)\b', property_address, flags=re.IGNORECASE):
-            return jsonify({'error': 'Please enter a valid address in the United States.'}), 400'''
-        
+            return jsonify({'error': 'seller_address and property_type field is required'}), 400
+
         # Check if seller_property_address is present in e_sign_data and contains mn, minnesota, fl, or florida
-        if not any(keyword in  property_address.lower() for keyword in ['mn', 'minnesota', 'fl', 'florida']):
+        if not any(keyword in property_address.lower() for keyword in ['mn', 'minnesota', 'fl', 'florida']):
             return jsonify({'error': "The address must be located in Minnesota (MN) or Florida (FL)."}), 400
         
         valid_address = validate_address(property_address)
         if not valid_address:
             return jsonify({'error': "Invalid Address. missing country, state or postal_code"}), 400
-           
+
         # Validate property_type
         valid_property_type = validate_property_type(property_type)
         if not valid_property_type:
-            return jsonify({'error': f"Invalid type. Applicable types are: [Residential Lease, Condo, Townhouse, Single_Family, Multifamily]"}), 400
-        
+            return jsonify({'error': "Invalid type. Applicable types are: [Residential Lease, Condo, Townhouse, Single_Family, Multifamily]"}), 400
+
         # Validate property_status
         if property_status is not None and property_status != '':
             valid_status = validate_property_status(property_status)
             if not valid_status:
-                return jsonify({'error': f"Invalid status. applicable status are: [Active,For Sale, Pending, Sold, Cancelled]"}), 400
-            
+                return jsonify({'error': "Invalid status. applicable status are: [Active, For Sale, Pending, Sold, Cancelled]"}), 400
+        
         property_data = {
-            'type': property_type,
-            'address': property_address,
-            'images': [],
-            'panoramic_images': [],
+            "name": data.get('name', None),
+            "construction": data.get('construction', None),
+            "kitchen": int(data.get('kitchen', 0) or 0),
+            "description": data.get('description', None),
+            "attached_garage": int(data.get('attached_garage', 0) or 0),
+            "garage_size": float(data.get('garage_size', 0.0) or 0.0),
+            "appliances": data.get('appliances', []),
+            "kitchen_features": data.get('kitchen_features', []),
+            "features": data.get('features', []),
+            "type_and_styles": data.get('type_and_styles', []),
+            "materials": data.get('materials', []),
+            "available_viewing_times": data.get('available_viewing_times', []),
+            "type": property_type,
+            "address": property_address,
+            "images": [],
+            "panoramic_images": [],
             "City": data.get('City', None),
             "CountyOrParish": data.get('CountyOrParish', None),
             "InternetAddressDisplayYN": data.get('InternetAddressDisplayYN', None),
@@ -112,12 +119,9 @@ class PropertyTypeSelectionView(MethodView):
             "VirtualTourURLUnbranded": data.get('VirtualTourURLUnbranded', None),
             "latitude": float(data.get('latitude', 0.0) or 0.0),
             "longitude": float(data.get('longitude', 0.0) or 0.0),
-            "appliances": data.get('appliances', []),
             "baths": int(data.get('baths', 0) or 0),
             "beds": int(data.get('beds', 0) or 0),
             "built_in": data.get('built_in', None),
-            "description": data.get('description', None),
-            "features": data.get('features', []),
             "full_bathrooms": int(data.get('full_bathrooms', 0) or 0),
             "half_bathrooms": int(data.get('half_bathrooms', 0) or 0),
             "price": float(data.get('price', 0.0) or 0.0),
@@ -125,11 +129,12 @@ class PropertyTypeSelectionView(MethodView):
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
             "open_house_times": data.get('open_house_times', [])
-        }       
+        }
 
         property_id = create_property(property_data)
         if not property_id:
             return jsonify({'error': 'Failed to create property.'}), 400
+        
         logger.info('Property created successfully')
         property_data['property_id'] = property_id
         
@@ -140,6 +145,7 @@ class PropertyTypeSelectionView(MethodView):
             'phone': user['phone'],
             'user_id': user['uuid']
         }
+        
         property_data.pop('_id', None)
         transaction_result = current_app.db.transaction.insert_one({
             'property_data': property_data,
@@ -153,11 +159,12 @@ class PropertyTypeSelectionView(MethodView):
             logger.info('Transaction created successfully')
         else:
             return jsonify({'error': 'Failed to create transaction.'}), 400
+        
         data['property_id'] = property_id
         data['transaction_id'] = transaction_id
         log_action(user['uuid'], user['role'], "selected-property_address and property_type", data)
-        return jsonify({'message':'data saved successfully.', 'transaction_id': transaction_id}), 201
-
+        
+        return jsonify({'message': 'data saved successfully.', 'transaction_id': transaction_id}), 201
 
 class PropertyTourView(MethodView):
     decorators = [custom_jwt_required()]
@@ -503,9 +510,11 @@ class SavePdfView(MethodView):
 
 class CheckoutView(MethodView):
     decorators = [custom_jwt_required()]
+
     def post(self):
         logger.info("Checkout process initiated.")
         current_user = get_jwt_identity()
+
         try:
             validate_email(current_user)
             user = current_app.db.users.find_one({'email': current_user})
@@ -519,22 +528,27 @@ class CheckoutView(MethodView):
         transaction_id = data.get('transaction_id')
         token = data.get('token')
         code = data.get('code')
-        payment_amount = int(data.get('payment_amount', 997)  or 0)
+        payment_amount = data.get('payment_amount') 
 
-        if payment_amount != 497 and payment_amount != 997:
-            return jsonify({'error':'Invalid payment amount'}), 400
+        if payment_amount is None:
+                payment_amount = 997  # Default value
+        else:
+            payment_amount = int(payment_amount)
+
+        if payment_amount not in {497, 997}:
+            return jsonify({'error': 'Invalid payment amount'}), 400
         
         if not transaction_id or not token:
-            return jsonify({'error':'Missing transacion_id or card token'}), 400
+            return jsonify({'error': 'Missing transaction_id or card token'}), 400
         
         transaction = current_app.db.transaction.find_one({'_id': ObjectId(transaction_id)})
         if not transaction:
-            return jsonify({'error':'Invalid Transaction'}), 400
+            return jsonify({'error': 'Invalid Transaction'}), 400
         
-        #Check for incorrect or used transaction
+        # Check for incorrect or used transaction
         existing_transaction = current_app.db.property_seller_transaction.find_one({"transaction_id": transaction_id, 'property_id': transaction['property_data']['property_id']})
         if existing_transaction:
-            return jsonify({'error':'Invalid transaction, transaction already exist for this property'}), 400
+            return jsonify({'error': 'Invalid transaction, transaction already exists for this property'}), 400
         
         coupon = current_app.db.coupon.find_one({'code': code})
         if coupon:
@@ -549,8 +563,7 @@ class CheckoutView(MethodView):
 
         try:
             if amount < 100 or amount > 1000000:
-                return jsonify({'error':'Invalid amount'}), 400
-            
+                return jsonify({'error': 'Invalid amount'}), 400
             logger.info("Amount validated.")
 
             charge = stripe.Charge.create(
@@ -559,12 +572,11 @@ class CheckoutView(MethodView):
                 source=token,
                 description='Seller App',
             )
-        
             if not (charge.paid and charge.status == 'succeeded'):
+                print("Payment failed.")
                 return jsonify({'error': 'Payment failed.'}), 400
-            
             logger.info("Charge created successfully.")
-            current_app.db.transaction.update_one({'_id':ObjectId(transaction_id)}, {'$set': {'amount': amount}})
+            current_app.db.transaction.update_one({'_id': ObjectId(transaction_id)}, {'$set': {'amount': amount}})
             
             lookup_data = {
                 "transaction_id": transaction_id,
@@ -577,32 +589,37 @@ class CheckoutView(MethodView):
             
             subject = 'Welcome to Our Platform'
             message = 'Thank you for signing up. We appreciate your business.'
-            recipient_email =  transaction['user_info']['email']
+            recipient_email = transaction['user_info'].get('email',None)
             
             # Replace `send_email` with your actual email sending function
             status_code, headers = send_email(subject, message, recipient_email)
-            if status_code == 202:
+            if status_code == 200:
+                print("Email sent successfully.")
                 transaction.pop('_id', None)
                 lookup_data.pop('_id', None)
                 payload = {
-                    'transaction':transaction,
+                    'transaction': transaction,
                     'property_seller_transaction': lookup_data
                 } 
-                log_action(user['uuid'],user['role'], "purchassed-property", payload)
+                log_action(user['uuid'], user['role'], "purchased-property", payload)
                 logger.info("Email sent successfully.")
-                return jsonify({'message': 'Property purchase succesfull.'}), 201  # Specify the success URL
+                return jsonify({'message': 'Property purchase successful.'}), 201  # Specify the success URL
             else:
+                print("Failed to send email.")
                 logger.error("Failed to send email.")
                 return jsonify({'error': 'Failed to send email.'}), 400
 
         except stripe.error.CardError as e:
+            print(f"Stripe card error: {e}")
             logger.error(f"Stripe card error: {e}")
             return jsonify({'error': str(e)}), 400
 
         except ValueError as ve:
-            logger.error(f"Invalid amount error: {ve}"), 400
-            return jsonify({'error': str(ve)})
+            print(f"Invalid amount error: {ve}")
+            logger.error(f"Invalid amount error: {ve}")
+            return jsonify({'error': str(ve)}), 400
         
         except Exception as e:
+            print(f"Failed to checkout: {e}")
             logger.error(f"Failed to checkout: {e}")
             return jsonify({'error': str(e)}), 400

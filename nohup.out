@@ -1,0 +1,210 @@
+INFO:app:DB_NAME from config: plus
+INFO:app:Connected to MQTT Broker with result code 0
+INFO:app:Connected to MQTT Broker at 127.0.0.1
+ * Debug mode: on
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://172.29.202.170:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with stat
+INFO:app:DB_NAME from config: plus
+INFO:app:Connected to MQTT Broker at 127.0.0.1
+INFO:app:Connected to MQTT Broker with result code 0
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 142-403-403
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:02:45] "[31m[1mPOST /api/user/properties/add/checkout HTTP/1.1[0m" 401 -
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:03:09] "[31m[1mPOST /api/user/properties/add/checkout HTTP/1.1[0m" 401 -
+INFO:root:Request Method: POST
+INFO:root:Request URL: http://66e9-223-233-70-5.ngrok-free.app/api/user/login
+INFO:root:Request Headers: Host: 66e9-223-233-70-5.ngrok-free.app
+User-Agent: PostmanRuntime/7.42.0
+Content-Length: 63
+Accept: */*
+Accept-Encoding: gzip, deflate, br
+Cache-Control: no-cache
+Content-Type: application/json
+Cookie: access_token_cookie=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTczMDQzNzAzMSwianRpIjoiYTg4MTUxYzgtMDIwZC00YTJhLWFjNjUtMzIzMGFiNDRiMjIwIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6Im1lZXRAbWFpbGluYXRvci5jb20iLCJuYmYiOjE3MzA0MzcwMzEsImNzcmYiOiJkOTA3MzgwNy1kODM5LTRjMWYtOWYzZi1hZTU1YWRjZjA3MmQiLCJleHAiOjE3MzA0NDA2MzF9.kwJVumj979doiCgw70Psp_aHCmiFcil-QX5XurXoRYc; csrf_access_token=d9073807-d839-4c1f-9f3f-ae55adcf072d
+Postman-Token: c799a3a4-cb6c-45eb-98ef-f1ec572d275e
+X-Forwarded-For: 223.233.70.5
+X-Forwarded-Host: 66e9-223-233-70-5.ngrok-free.app
+X-Forwarded-Proto: https
+
+
+INFO:root:Request JSON Data: {'email': 'meet@mailinator.com', 'password': 'shw@1432'}
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:03:16] "POST /api/user/login HTTP/1.1" 200 -
+INFO:app.views.seller_add_property:Checkout process initiated.
+INFO:app.views.seller_add_property:Token received: tok_visa_debit, Amount: 49700
+INFO:app.views.seller_add_property:Amount validated.
+INFO:stripe:message='Request to Stripe api' method=post url=https://api.stripe.com/v1/charges
+DEBUG:stripe:api_version=2024-09-30.acacia message='Post details' post_data=amount=49700&currency=usd&source=tok_visa_debit&description=Seller+App
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.stripe.com:443
+DEBUG:urllib3.connectionpool:https://api.stripe.com:443 "POST /v1/charges HTTP/11" 200 3327
+INFO:stripe:message='Stripe API response' path=https://api.stripe.com/v1/charges response_code=200
+DEBUG:stripe:body='{\n  "id": "ch_3QGDxIDBozxLjRB417PAFg8k",\n  "object": "charge",\n  "amount": 49700,\n  "amount_captured": 49700,\n  "amount_refunded": 0,\n  "application": null,\n  "application_fee": null,\n  "application_fee_amount": null,\n  "balance_transaction": "txn_3QGDxIDBozxLjRB41TrgtTqI",\n  "billing_details": {\n    "address": {\n      "city": null,\n      "country": null,\n      "line1": null,\n      "line2": null,\n      "postal_code": null,\n      "state": null\n    },\n    "email": null,\n    "name": null,\n    "phone": null\n  },\n  "calculated_statement_descriptor": "AIRE BROKERS",\n  "captured": true,\n  "created": 1730441012,\n  "currency": "usd",\n  "customer": null,\n  "description": "Seller App",\n  "destination": null,\n  "dispute": null,\n  "disputed": false,\n  "failure_balance_transaction": null,\n  "failure_code": null,\n  "failure_message": null,\n  "fraud_details": {},\n  "invoice": null,\n  "livemode": false,\n  "metadata": {},\n  "on_behalf_of": null,\n  "order": null,\n  "outcome": {\n    "network_status": "approved_by_network",\n    "reason": null,\n    "risk_level": "normal",\n    "risk_score": 62,\n    "seller_message": "Payment complete.",\n    "type": "authorized"\n  },\n  "paid": true,\n  "payment_intent": null,\n  "payment_method": "card_1QGDxIDBozxLjRB4trx0h8EG",\n  "payment_method_details": {\n    "card": {\n      "amount_authorized": 49700,\n      "authorization_code": null,\n      "brand": "visa",\n      "checks": {\n        "address_line1_check": null,\n        "address_postal_code_check": null,\n        "cvc_check": "pass"\n      },\n      "country": "US",\n      "exp_month": 11,\n      "exp_year": 2025,\n      "extended_authorization": {\n        "status": "disabled"\n      },\n      "fingerprint": "UJCnjLgVcdYQu6Df",\n      "funding": "debit",\n      "incremental_authorization": {\n        "status": "unavailable"\n      },\n      "installments": null,\n      "last4": "5556",\n      "mandate": null,\n      "multicapture": {\n        "status": "unavailable"\n      },\n      "network": "visa",\n      "network_token": {\n        "used": false\n      },\n      "overcapture": {\n        "maximum_amount_capturable": 49700,\n        "status": "unavailable"\n      },\n      "three_d_secure": null,\n      "wallet": null\n    },\n    "type": "card"\n  },\n  "receipt_email": null,\n  "receipt_number": null,\n  "receipt_url": "https://pay.stripe.com/receipts/payment/CAcaFwoVYWNjdF8xT2JSVllEQm96eExqUkI0KLXekbkGMgbp33_wS5I6LBaD9hs9jvrEGazGxznxheh9AiwY45hXZOwrXd7xX6ikqpvW8lV7iQfKoj4C",\n  "refunded": false,\n  "review": null,\n  "shipping": null,\n  "source": {\n    "id": "card_1QGDxIDBozxLjRB4trx0h8EG",\n    "object": "card",\n    "address_city": null,\n    "address_country": null,\n    "address_line1": null,\n    "address_line1_check": null,\n    "address_line2": null,\n    "address_state": null,\n    "address_zip": null,\n    "address_zip_check": null,\n    "brand": "Visa",\n    "country": "US",\n    "customer": null,\n    "cvc_check": "pass",\n    "dynamic_last4": null,\n    "exp_month": 11,\n    "exp_year": 2025,\n    "fingerprint": "UJCnjLgVcdYQu6Df",\n    "funding": "debit",\n    "last4": "5556",\n    "metadata": {},\n    "name": null,\n    "tokenization_method": null,\n    "wallet": null\n  },\n  "source_transfer": null,\n  "statement_descriptor": null,\n  "statement_descriptor_suffix": null,\n  "status": "succeeded",\n  "transfer_data": null,\n  "transfer_group": null\n}' message='API response body'
+DEBUG:stripe:link=https://dashboard.stripe.com/test/logs/req_HOUHoY1RW8iYQo message='Dashboard link for request'
+INFO:app.views.seller_add_property:Charge created successfully.
+ERROR:app.views.seller_add_property:Failed to send email.
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:03:31] "[31m[1mPOST /api/user/properties/add/checkout HTTP/1.1[0m" 400 -
+INFO:werkzeug: * Detected change in '/mnt/c/Users/91853/OneDrive/Desktop/API/app/views/seller_add_property.py', reloading
+INFO:werkzeug: * Restarting with stat
+INFO:app:DB_NAME from config: plus
+INFO:app:Connected to MQTT Broker at 127.0.0.1
+INFO:app:Connected to MQTT Broker with result code 0
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 142-403-403
+INFO:app.views.seller_add_property:Checkout process initiated.
+INFO:app.views.seller_add_property:Checkout process initiated.
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:06:33] "[31m[1mPOST /api/user/properties/add/checkout HTTP/1.1[0m" 400 -
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:06:33] "[31m[1mPOST /api/user/properties/add/checkout HTTP/1.1[0m" 400 -
+INFO:app:DB_NAME from config: plus
+INFO:app:Connected to MQTT Broker at 127.0.0.1
+INFO:app:Connected to MQTT Broker with result code 0
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:06:42] "[31m[1mPOST /api/user/properties/add/property-type-selection HTTP/1.1[0m" 401 -
+ * Debug mode: on
+Address already in use
+Port 5000 is in use by another program. Either identify and stop that program, or start the server with a different port.
+INFO:root:Request Method: POST
+INFO:root:Request URL: http://66e9-223-233-70-5.ngrok-free.app/api/user/properties/add/property-type-selection
+INFO:root:Request Headers: Host: 66e9-223-233-70-5.ngrok-free.app
+User-Agent: PostmanRuntime/7.42.0
+Content-Length: 1966
+Accept: */*
+Accept-Encoding: gzip, deflate, br
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTczMDQ0MDk5NiwianRpIjoiYTQxOWU4NTAtMDcyMS00ZjEwLTgwNWEtNjdlZTVkMDRlODUxIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6Im1lZXRAbWFpbGluYXRvci5jb20iLCJuYmYiOjE3MzA0NDA5OTYsImNzcmYiOiIxZjZjMTc2Ny1hOGFiLTQzZjMtYjgxYS01MGJiYzE5M2U3OTEiLCJleHAiOjE3MzA0NDQ1OTZ9.n6see7ZW66WAhvhs-9N4zVuu1pieQZwVjkLJucwfnC8
+Cache-Control: no-cache
+Content-Type: application/json
+Cookie: access_token_cookie=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTczMDQ0MDk5NiwianRpIjoiYTQxOWU4NTAtMDcyMS00ZjEwLTgwNWEtNjdlZTVkMDRlODUxIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6Im1lZXRAbWFpbGluYXRvci5jb20iLCJuYmYiOjE3MzA0NDA5OTYsImNzcmYiOiIxZjZjMTc2Ny1hOGFiLTQzZjMtYjgxYS01MGJiYzE5M2U3OTEiLCJleHAiOjE3MzA0NDQ1OTZ9.n6see7ZW66WAhvhs-9N4zVuu1pieQZwVjkLJucwfnC8; csrf_access_token=1f6c1767-a8ab-43f3-b81a-50bbc193e791
+Postman-Token: 4a0712fa-9a52-49c4-91c5-c7fcd3b578c6
+X-Forwarded-For: 223.233.70.5
+X-Forwarded-Host: 66e9-223-233-70-5.ngrok-free.app
+X-Forwarded-Proto: https
+
+
+INFO:root:Request JSON Data: {'seller_address': '123 Main St, Minneapolis, MN 55401', 'property_type': 'Single_Family', 'AssociationFee': None, 'City': 'SARASOTA', 'Cooling': '["Central Air"]', 'CountyOrParish': 'Sarasota', 'Heating': None, 'InternetAddressDisplayYN': True, 'ListingContractDate': '2008-10-08', 'ListingId': 'MFRA246917', 'LivingArea': 1161.0, 'LotSizeAcres': None, 'OriginatingSystemName': None, 'ParcelNumber': None, 'ParkingFeatures': None, 'PostalCode': None, 'PropertySubType': 'Condominium', 'Sewer': None, 'StandardStatus': 'Active', 'StateOrProvince': None, 'StreetName': None, 'StreetNumber': None, 'StreetSuffix': None, 'SubdivisionName': None, 'TaxAnnualAmount': 5140.31, 'TaxLegalDescription': None, 'Utilities': None, 'VirtualTourURLUnbranded': None, 'WaterSource': None, 'WaterfrontYN': None, 'YearBuilt': None, 'ZoningDescription': None, 'address': None, 'appliances': '["Dishwasher", "Disposal", "Dryer", "Range", "Refrigerator", "Washer"]', 'attached_garage': None, 'baths': 2, 'beds': 2, 'built_in': 1978, 'description': None, 'features': None, 'full_bathrooms': 2, 'half_bathrooms': None, 'Image': None, 'latitude': 27.311423, 'longitude': -82.574267, 'materials': None, 'minPrice': None, 'open_house_times': [], 'price': 6000.0, 'size': None, 'type': 'Residential Lease'}
+DEBUG:urllib3.util.retry:Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+DEBUG:urllib3.util.retry:Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+DEBUG:geopy:GoogleV3.geocode: https://maps.googleapis.com/maps/api/geocode/json?sensor=false&address=123+Main+St%2C+Minneapolis%2C+MN+55401&key=AIzaSyC2TJgwyJnT8c9l56D3QZgVeMhS6zP6vxg
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): maps.googleapis.com:443
+DEBUG:urllib3.connectionpool:https://maps.googleapis.com:443 "GET /maps/api/geocode/json?sensor=false&address=123+Main+St%2C+Minneapolis%2C+MN+55401&key=AIzaSyC2TJgwyJnT8c9l56D3QZgVeMhS6zP6vxg HTTP/11" 200 2839
+DEBUG:urllib3.util.retry:Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+DEBUG:urllib3.util.retry:Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+DEBUG:geopy:GoogleV3.geocode: https://maps.googleapis.com/maps/api/geocode/json?sensor=false&address=123+Main+St%2C+Minneapolis%2C+MN+55401&key=AIzaSyC2TJgwyJnT8c9l56D3QZgVeMhS6zP6vxg
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): maps.googleapis.com:443
+DEBUG:urllib3.connectionpool:https://maps.googleapis.com:443 "GET /maps/api/geocode/json?sensor=false&address=123+Main+St%2C+Minneapolis%2C+MN+55401&key=AIzaSyC2TJgwyJnT8c9l56D3QZgVeMhS6zP6vxg HTTP/11" 200 2839
+INFO:app.services.properties:Property created successfully.
+INFO:app.views.seller_add_property:Property created successfully
+INFO:app.views.seller_add_property:Transaction created successfully
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:06:58] "[35m[1mPOST /api/user/properties/add/property-type-selection HTTP/1.1[0m" 201 -
+INFO:app.views.seller_add_property:Checkout process initiated.
+INFO:app.views.seller_add_property:Token received: tok_visa_debit, Amount: 49700
+INFO:app.views.seller_add_property:Amount validated.
+INFO:stripe:message='Request to Stripe api' method=post url=https://api.stripe.com/v1/charges
+DEBUG:stripe:api_version=2024-09-30.acacia message='Post details' post_data=amount=49700&currency=usd&source=tok_visa_debit&description=Seller+App
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.stripe.com:443
+DEBUG:urllib3.connectionpool:https://api.stripe.com:443 "POST /v1/charges HTTP/11" 200 3327
+INFO:stripe:message='Stripe API response' path=https://api.stripe.com/v1/charges response_code=200
+DEBUG:stripe:body='{\n  "id": "ch_3QGE0qDBozxLjRB40iM5YnPY",\n  "object": "charge",\n  "amount": 49700,\n  "amount_captured": 49700,\n  "amount_refunded": 0,\n  "application": null,\n  "application_fee": null,\n  "application_fee_amount": null,\n  "balance_transaction": "txn_3QGE0qDBozxLjRB40K4ovdT8",\n  "billing_details": {\n    "address": {\n      "city": null,\n      "country": null,\n      "line1": null,\n      "line2": null,\n      "postal_code": null,\n      "state": null\n    },\n    "email": null,\n    "name": null,\n    "phone": null\n  },\n  "calculated_statement_descriptor": "AIRE BROKERS",\n  "captured": true,\n  "created": 1730441232,\n  "currency": "usd",\n  "customer": null,\n  "description": "Seller App",\n  "destination": null,\n  "dispute": null,\n  "disputed": false,\n  "failure_balance_transaction": null,\n  "failure_code": null,\n  "failure_message": null,\n  "fraud_details": {},\n  "invoice": null,\n  "livemode": false,\n  "metadata": {},\n  "on_behalf_of": null,\n  "order": null,\n  "outcome": {\n    "network_status": "approved_by_network",\n    "reason": null,\n    "risk_level": "normal",\n    "risk_score": 34,\n    "seller_message": "Payment complete.",\n    "type": "authorized"\n  },\n  "paid": true,\n  "payment_intent": null,\n  "payment_method": "card_1QGE0qDBozxLjRB4znwXWif9",\n  "payment_method_details": {\n    "card": {\n      "amount_authorized": 49700,\n      "authorization_code": null,\n      "brand": "visa",\n      "checks": {\n        "address_line1_check": null,\n        "address_postal_code_check": null,\n        "cvc_check": "pass"\n      },\n      "country": "US",\n      "exp_month": 11,\n      "exp_year": 2025,\n      "extended_authorization": {\n        "status": "disabled"\n      },\n      "fingerprint": "UJCnjLgVcdYQu6Df",\n      "funding": "debit",\n      "incremental_authorization": {\n        "status": "unavailable"\n      },\n      "installments": null,\n      "last4": "5556",\n      "mandate": null,\n      "multicapture": {\n        "status": "unavailable"\n      },\n      "network": "visa",\n      "network_token": {\n        "used": false\n      },\n      "overcapture": {\n        "maximum_amount_capturable": 49700,\n        "status": "unavailable"\n      },\n      "three_d_secure": null,\n      "wallet": null\n    },\n    "type": "card"\n  },\n  "receipt_email": null,\n  "receipt_number": null,\n  "receipt_url": "https://pay.stripe.com/receipts/payment/CAcaFwoVYWNjdF8xT2JSVllEQm96eExqUkI0KJHgkbkGMgaG4cYjHo46LBZMY4rrQSULE79U2YChE9ceTxNrv4_e75GZAqhGPgNvWfojaensmSEh6zr9",\n  "refunded": false,\n  "review": null,\n  "shipping": null,\n  "source": {\n    "id": "card_1QGE0qDBozxLjRB4znwXWif9",\n    "object": "card",\n    "address_city": null,\n    "address_country": null,\n    "address_line1": null,\n    "address_line1_check": null,\n    "address_line2": null,\n    "address_state": null,\n    "address_zip": null,\n    "address_zip_check": null,\n    "brand": "Visa",\n    "country": "US",\n    "customer": null,\n    "cvc_check": "pass",\n    "dynamic_last4": null,\n    "exp_month": 11,\n    "exp_year": 2025,\n    "fingerprint": "UJCnjLgVcdYQu6Df",\n    "funding": "debit",\n    "last4": "5556",\n    "metadata": {},\n    "name": null,\n    "tokenization_method": null,\n    "wallet": null\n  },\n  "source_transfer": null,\n  "statement_descriptor": null,\n  "statement_descriptor_suffix": null,\n  "status": "succeeded",\n  "transfer_data": null,\n  "transfer_group": null\n}' message='API response body'
+DEBUG:stripe:link=https://dashboard.stripe.com/test/logs/req_enOgCjjPNUhbwt message='Dashboard link for request'
+INFO:app.views.seller_add_property:Charge created successfully.
+ERROR:app.views.seller_add_property:Failed to send email.
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:07:13] "[31m[1mPOST /api/user/properties/add/checkout HTTP/1.1[0m" 400 -
+INFO:werkzeug: * Detected change in '/mnt/c/Users/91853/OneDrive/Desktop/API/app/services/properties.py', reloading
+INFO:werkzeug: * Restarting with stat
+INFO:app:DB_NAME from config: plus
+INFO:app:Connected to MQTT Broker at 127.0.0.1
+INFO:app:Connected to MQTT Broker with result code 0
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 142-403-403
+INFO:root:Request Method: POST
+INFO:root:Request URL: http://66e9-223-233-70-5.ngrok-free.app/api/user/properties/add/property-type-selection
+INFO:root:Request Headers: Host: 66e9-223-233-70-5.ngrok-free.app
+User-Agent: PostmanRuntime/7.42.0
+Content-Length: 1966
+Accept: */*
+Accept-Encoding: gzip, deflate, br
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTczMDQ0MDk5NiwianRpIjoiYTQxOWU4NTAtMDcyMS00ZjEwLTgwNWEtNjdlZTVkMDRlODUxIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6Im1lZXRAbWFpbGluYXRvci5jb20iLCJuYmYiOjE3MzA0NDA5OTYsImNzcmYiOiIxZjZjMTc2Ny1hOGFiLTQzZjMtYjgxYS01MGJiYzE5M2U3OTEiLCJleHAiOjE3MzA0NDQ1OTZ9.n6see7ZW66WAhvhs-9N4zVuu1pieQZwVjkLJucwfnC8
+Cache-Control: no-cache
+Content-Type: application/json
+Cookie: access_token_cookie=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTczMDQ0MDk5NiwianRpIjoiYTQxOWU4NTAtMDcyMS00ZjEwLTgwNWEtNjdlZTVkMDRlODUxIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6Im1lZXRAbWFpbGluYXRvci5jb20iLCJuYmYiOjE3MzA0NDA5OTYsImNzcmYiOiIxZjZjMTc2Ny1hOGFiLTQzZjMtYjgxYS01MGJiYzE5M2U3OTEiLCJleHAiOjE3MzA0NDQ1OTZ9.n6see7ZW66WAhvhs-9N4zVuu1pieQZwVjkLJucwfnC8; csrf_access_token=1f6c1767-a8ab-43f3-b81a-50bbc193e791
+Postman-Token: 96665afc-0d94-456e-8449-42d651284405
+X-Forwarded-For: 223.233.70.5
+X-Forwarded-Host: 66e9-223-233-70-5.ngrok-free.app
+X-Forwarded-Proto: https
+
+
+INFO:root:Request JSON Data: {'seller_address': '123 Main St, Minneapolis, MN 55401', 'property_type': 'Single_Family', 'AssociationFee': None, 'City': 'SARASOTA', 'Cooling': '["Central Air"]', 'CountyOrParish': 'Sarasota', 'Heating': None, 'InternetAddressDisplayYN': True, 'ListingContractDate': '2008-10-08', 'ListingId': 'MFRA246917', 'LivingArea': 1161.0, 'LotSizeAcres': None, 'OriginatingSystemName': None, 'ParcelNumber': None, 'ParkingFeatures': None, 'PostalCode': None, 'PropertySubType': 'Condominium', 'Sewer': None, 'StandardStatus': 'Active', 'StateOrProvince': None, 'StreetName': None, 'StreetNumber': None, 'StreetSuffix': None, 'SubdivisionName': None, 'TaxAnnualAmount': 5140.31, 'TaxLegalDescription': None, 'Utilities': None, 'VirtualTourURLUnbranded': None, 'WaterSource': None, 'WaterfrontYN': None, 'YearBuilt': None, 'ZoningDescription': None, 'address': None, 'appliances': '["Dishwasher", "Disposal", "Dryer", "Range", "Refrigerator", "Washer"]', 'attached_garage': None, 'baths': 2, 'beds': 2, 'built_in': 1978, 'description': None, 'features': None, 'full_bathrooms': 2, 'half_bathrooms': None, 'Image': None, 'latitude': 27.311423, 'longitude': -82.574267, 'materials': None, 'minPrice': None, 'open_house_times': [], 'price': 6000.0, 'size': None, 'type': 'Residential Lease'}
+DEBUG:urllib3.util.retry:Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+DEBUG:urllib3.util.retry:Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+DEBUG:geopy:GoogleV3.geocode: https://maps.googleapis.com/maps/api/geocode/json?sensor=false&address=123+Main+St%2C+Minneapolis%2C+MN+55401&key=AIzaSyC2TJgwyJnT8c9l56D3QZgVeMhS6zP6vxg
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): maps.googleapis.com:443
+DEBUG:urllib3.connectionpool:https://maps.googleapis.com:443 "GET /maps/api/geocode/json?sensor=false&address=123+Main+St%2C+Minneapolis%2C+MN+55401&key=AIzaSyC2TJgwyJnT8c9l56D3QZgVeMhS6zP6vxg HTTP/11" 200 2839
+DEBUG:urllib3.util.retry:Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+DEBUG:urllib3.util.retry:Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+DEBUG:geopy:GoogleV3.geocode: https://maps.googleapis.com/maps/api/geocode/json?sensor=false&address=123+Main+St%2C+Minneapolis%2C+MN+55401&key=AIzaSyC2TJgwyJnT8c9l56D3QZgVeMhS6zP6vxg
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): maps.googleapis.com:443
+DEBUG:urllib3.connectionpool:https://maps.googleapis.com:443 "GET /maps/api/geocode/json?sensor=false&address=123+Main+St%2C+Minneapolis%2C+MN+55401&key=AIzaSyC2TJgwyJnT8c9l56D3QZgVeMhS6zP6vxg HTTP/11" 200 2839
+INFO:app.services.properties:Property created successfully.
+INFO:app.views.seller_add_property:Property created successfully
+INFO:app.views.seller_add_property:Transaction created successfully
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:12:56] "[35m[1mPOST /api/user/properties/add/property-type-selection HTTP/1.1[0m" 201 -
+INFO:app.views.seller_add_property:Checkout process initiated.
+INFO:app.views.seller_add_property:Token received: tok_visa_debit, Amount: 49700
+INFO:app.views.seller_add_property:Amount validated.
+INFO:stripe:message='Request to Stripe api' method=post url=https://api.stripe.com/v1/charges
+DEBUG:stripe:api_version=2024-09-30.acacia message='Post details' post_data=amount=49700&currency=usd&source=tok_visa_debit&description=Seller+App
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.stripe.com:443
+DEBUG:urllib3.connectionpool:https://api.stripe.com:443 "POST /v1/charges HTTP/11" 200 3327
+INFO:stripe:message='Stripe API response' path=https://api.stripe.com/v1/charges response_code=200
+DEBUG:stripe:body='{\n  "id": "ch_3QGE6cDBozxLjRB41jPEkWpL",\n  "object": "charge",\n  "amount": 49700,\n  "amount_captured": 49700,\n  "amount_refunded": 0,\n  "application": null,\n  "application_fee": null,\n  "application_fee_amount": null,\n  "balance_transaction": "txn_3QGE6cDBozxLjRB41yEgxzwW",\n  "billing_details": {\n    "address": {\n      "city": null,\n      "country": null,\n      "line1": null,\n      "line2": null,\n      "postal_code": null,\n      "state": null\n    },\n    "email": null,\n    "name": null,\n    "phone": null\n  },\n  "calculated_statement_descriptor": "AIRE BROKERS",\n  "captured": true,\n  "created": 1730441590,\n  "currency": "usd",\n  "customer": null,\n  "description": "Seller App",\n  "destination": null,\n  "dispute": null,\n  "disputed": false,\n  "failure_balance_transaction": null,\n  "failure_code": null,\n  "failure_message": null,\n  "fraud_details": {},\n  "invoice": null,\n  "livemode": false,\n  "metadata": {},\n  "on_behalf_of": null,\n  "order": null,\n  "outcome": {\n    "network_status": "approved_by_network",\n    "reason": null,\n    "risk_level": "normal",\n    "risk_score": 20,\n    "seller_message": "Payment complete.",\n    "type": "authorized"\n  },\n  "paid": true,\n  "payment_intent": null,\n  "payment_method": "card_1QGE6cDBozxLjRB4t6eEhGa6",\n  "payment_method_details": {\n    "card": {\n      "amount_authorized": 49700,\n      "authorization_code": null,\n      "brand": "visa",\n      "checks": {\n        "address_line1_check": null,\n        "address_postal_code_check": null,\n        "cvc_check": "pass"\n      },\n      "country": "US",\n      "exp_month": 11,\n      "exp_year": 2025,\n      "extended_authorization": {\n        "status": "disabled"\n      },\n      "fingerprint": "UJCnjLgVcdYQu6Df",\n      "funding": "debit",\n      "incremental_authorization": {\n        "status": "unavailable"\n      },\n      "installments": null,\n      "last4": "5556",\n      "mandate": null,\n      "multicapture": {\n        "status": "unavailable"\n      },\n      "network": "visa",\n      "network_token": {\n        "used": false\n      },\n      "overcapture": {\n        "maximum_amount_capturable": 49700,\n        "status": "unavailable"\n      },\n      "three_d_secure": null,\n      "wallet": null\n    },\n    "type": "card"\n  },\n  "receipt_email": null,\n  "receipt_number": null,\n  "receipt_url": "https://pay.stripe.com/receipts/payment/CAcaFwoVYWNjdF8xT2JSVllEQm96eExqUkI0KPfikbkGMgZdj4dCf3g6LBZp_PYkprLARJ9n0lEciy8v9StRbCUorEwsaY2wjeJtuuFsOuJ2WUsxKZ3n",\n  "refunded": false,\n  "review": null,\n  "shipping": null,\n  "source": {\n    "id": "card_1QGE6cDBozxLjRB4t6eEhGa6",\n    "object": "card",\n    "address_city": null,\n    "address_country": null,\n    "address_line1": null,\n    "address_line1_check": null,\n    "address_line2": null,\n    "address_state": null,\n    "address_zip": null,\n    "address_zip_check": null,\n    "brand": "Visa",\n    "country": "US",\n    "customer": null,\n    "cvc_check": "pass",\n    "dynamic_last4": null,\n    "exp_month": 11,\n    "exp_year": 2025,\n    "fingerprint": "UJCnjLgVcdYQu6Df",\n    "funding": "debit",\n    "last4": "5556",\n    "metadata": {},\n    "name": null,\n    "tokenization_method": null,\n    "wallet": null\n  },\n  "source_transfer": null,\n  "statement_descriptor": null,\n  "statement_descriptor_suffix": null,\n  "status": "succeeded",\n  "transfer_data": null,\n  "transfer_group": null\n}' message='API response body'
+DEBUG:stripe:link=https://dashboard.stripe.com/test/logs/req_FVvJBTEph8zuw0 message='Dashboard link for request'
+INFO:app.views.seller_add_property:Charge created successfully.
+ERROR:app.views.seller_add_property:Failed to send email.
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:13:11] "[31m[1mPOST /api/user/properties/add/checkout HTTP/1.1[0m" 400 -
+INFO:app.views.seller_add_property:Checkout process initiated.
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:14:02] "[31m[1mPOST /api/user/properties/add/checkout HTTP/1.1[0m" 400 -
+INFO:root:Request Method: POST
+INFO:root:Request URL: http://66e9-223-233-70-5.ngrok-free.app/api/user/properties/add/property-type-selection
+INFO:root:Request Headers: Host: 66e9-223-233-70-5.ngrok-free.app
+User-Agent: PostmanRuntime/7.42.0
+Content-Length: 1966
+Accept: */*
+Accept-Encoding: gzip, deflate, br
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTczMDQ0MDk5NiwianRpIjoiYTQxOWU4NTAtMDcyMS00ZjEwLTgwNWEtNjdlZTVkMDRlODUxIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6Im1lZXRAbWFpbGluYXRvci5jb20iLCJuYmYiOjE3MzA0NDA5OTYsImNzcmYiOiIxZjZjMTc2Ny1hOGFiLTQzZjMtYjgxYS01MGJiYzE5M2U3OTEiLCJleHAiOjE3MzA0NDQ1OTZ9.n6see7ZW66WAhvhs-9N4zVuu1pieQZwVjkLJucwfnC8
+Cache-Control: no-cache
+Content-Type: application/json
+Cookie: access_token_cookie=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTczMDQ0MDk5NiwianRpIjoiYTQxOWU4NTAtMDcyMS00ZjEwLTgwNWEtNjdlZTVkMDRlODUxIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6Im1lZXRAbWFpbGluYXRvci5jb20iLCJuYmYiOjE3MzA0NDA5OTYsImNzcmYiOiIxZjZjMTc2Ny1hOGFiLTQzZjMtYjgxYS01MGJiYzE5M2U3OTEiLCJleHAiOjE3MzA0NDQ1OTZ9.n6see7ZW66WAhvhs-9N4zVuu1pieQZwVjkLJucwfnC8; csrf_access_token=1f6c1767-a8ab-43f3-b81a-50bbc193e791
+Postman-Token: 2dcd92dd-b166-4d75-97d6-67e632169d06
+X-Forwarded-For: 223.233.70.5
+X-Forwarded-Host: 66e9-223-233-70-5.ngrok-free.app
+X-Forwarded-Proto: https
+
+
+INFO:root:Request JSON Data: {'seller_address': '123 Main St, Minneapolis, MN 55401', 'property_type': 'Single_Family', 'AssociationFee': None, 'City': 'SARASOTA', 'Cooling': '["Central Air"]', 'CountyOrParish': 'Sarasota', 'Heating': None, 'InternetAddressDisplayYN': True, 'ListingContractDate': '2008-10-08', 'ListingId': 'MFRA246917', 'LivingArea': 1161.0, 'LotSizeAcres': None, 'OriginatingSystemName': None, 'ParcelNumber': None, 'ParkingFeatures': None, 'PostalCode': None, 'PropertySubType': 'Condominium', 'Sewer': None, 'StandardStatus': 'Active', 'StateOrProvince': None, 'StreetName': None, 'StreetNumber': None, 'StreetSuffix': None, 'SubdivisionName': None, 'TaxAnnualAmount': 5140.31, 'TaxLegalDescription': None, 'Utilities': None, 'VirtualTourURLUnbranded': None, 'WaterSource': None, 'WaterfrontYN': None, 'YearBuilt': None, 'ZoningDescription': None, 'address': None, 'appliances': '["Dishwasher", "Disposal", "Dryer", "Range", "Refrigerator", "Washer"]', 'attached_garage': None, 'baths': 2, 'beds': 2, 'built_in': 1978, 'description': None, 'features': None, 'full_bathrooms': 2, 'half_bathrooms': None, 'Image': None, 'latitude': 27.311423, 'longitude': -82.574267, 'materials': None, 'minPrice': None, 'open_house_times': [], 'price': 6000.0, 'size': None, 'type': 'Residential Lease'}
+DEBUG:urllib3.util.retry:Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+DEBUG:urllib3.util.retry:Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+DEBUG:geopy:GoogleV3.geocode: https://maps.googleapis.com/maps/api/geocode/json?sensor=false&address=123+Main+St%2C+Minneapolis%2C+MN+55401&key=AIzaSyC2TJgwyJnT8c9l56D3QZgVeMhS6zP6vxg
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): maps.googleapis.com:443
+DEBUG:urllib3.connectionpool:https://maps.googleapis.com:443 "GET /maps/api/geocode/json?sensor=false&address=123+Main+St%2C+Minneapolis%2C+MN+55401&key=AIzaSyC2TJgwyJnT8c9l56D3QZgVeMhS6zP6vxg HTTP/11" 200 2839
+DEBUG:urllib3.util.retry:Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+DEBUG:urllib3.util.retry:Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+DEBUG:geopy:GoogleV3.geocode: https://maps.googleapis.com/maps/api/geocode/json?sensor=false&address=123+Main+St%2C+Minneapolis%2C+MN+55401&key=AIzaSyC2TJgwyJnT8c9l56D3QZgVeMhS6zP6vxg
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): maps.googleapis.com:443
+DEBUG:urllib3.connectionpool:https://maps.googleapis.com:443 "GET /maps/api/geocode/json?sensor=false&address=123+Main+St%2C+Minneapolis%2C+MN+55401&key=AIzaSyC2TJgwyJnT8c9l56D3QZgVeMhS6zP6vxg HTTP/11" 200 2839
+INFO:app.services.properties:Property created successfully.
+INFO:app.views.seller_add_property:Property created successfully
+INFO:app.views.seller_add_property:Transaction created successfully
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:14:07] "[35m[1mPOST /api/user/properties/add/property-type-selection HTTP/1.1[0m" 201 -
+INFO:app.views.seller_add_property:Checkout process initiated.
+INFO:app.views.seller_add_property:Token received: tok_visa_debit, Amount: 49700
+INFO:app.views.seller_add_property:Amount validated.
+INFO:stripe:message='Request to Stripe api' method=post url=https://api.stripe.com/v1/charges
+DEBUG:stripe:api_version=2024-09-30.acacia message='Post details' post_data=amount=49700&currency=usd&source=tok_visa_debit&description=Seller+App
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.stripe.com:443
+DEBUG:urllib3.connectionpool:https://api.stripe.com:443 "POST /v1/charges HTTP/11" 200 3327
+INFO:stripe:message='Stripe API response' path=https://api.stripe.com/v1/charges response_code=200
+DEBUG:stripe:body='{\n  "id": "ch_3QGE7lDBozxLjRB41ODUfR1O",\n  "object": "charge",\n  "amount": 49700,\n  "amount_captured": 49700,\n  "amount_refunded": 0,\n  "application": null,\n  "application_fee": null,\n  "application_fee_amount": null,\n  "balance_transaction": "txn_3QGE7lDBozxLjRB414cN5LQd",\n  "billing_details": {\n    "address": {\n      "city": null,\n      "country": null,\n      "line1": null,\n      "line2": null,\n      "postal_code": null,\n      "state": null\n    },\n    "email": null,\n    "name": null,\n    "phone": null\n  },\n  "calculated_statement_descriptor": "AIRE BROKERS",\n  "captured": true,\n  "created": 1730441661,\n  "currency": "usd",\n  "customer": null,\n  "description": "Seller App",\n  "destination": null,\n  "dispute": null,\n  "disputed": false,\n  "failure_balance_transaction": null,\n  "failure_code": null,\n  "failure_message": null,\n  "fraud_details": {},\n  "invoice": null,\n  "livemode": false,\n  "metadata": {},\n  "on_behalf_of": null,\n  "order": null,\n  "outcome": {\n    "network_status": "approved_by_network",\n    "reason": null,\n    "risk_level": "normal",\n    "risk_score": 53,\n    "seller_message": "Payment complete.",\n    "type": "authorized"\n  },\n  "paid": true,\n  "payment_intent": null,\n  "payment_method": "card_1QGE7lDBozxLjRB4RDp8l1fO",\n  "payment_method_details": {\n    "card": {\n      "amount_authorized": 49700,\n      "authorization_code": null,\n      "brand": "visa",\n      "checks": {\n        "address_line1_check": null,\n        "address_postal_code_check": null,\n        "cvc_check": "pass"\n      },\n      "country": "US",\n      "exp_month": 11,\n      "exp_year": 2025,\n      "extended_authorization": {\n        "status": "disabled"\n      },\n      "fingerprint": "UJCnjLgVcdYQu6Df",\n      "funding": "debit",\n      "incremental_authorization": {\n        "status": "unavailable"\n      },\n      "installments": null,\n      "last4": "5556",\n      "mandate": null,\n      "multicapture": {\n        "status": "unavailable"\n      },\n      "network": "visa",\n      "network_token": {\n        "used": false\n      },\n      "overcapture": {\n        "maximum_amount_capturable": 49700,\n        "status": "unavailable"\n      },\n      "three_d_secure": null,\n      "wallet": null\n    },\n    "type": "card"\n  },\n  "receipt_email": null,\n  "receipt_number": null,\n  "receipt_url": "https://pay.stripe.com/receipts/payment/CAcaFwoVYWNjdF8xT2JSVllEQm96eExqUkI0KL3jkbkGMgbKUetpt0c6LBbyWHxv8fjtH1gP6k5fa5TTZ5ZDqxhr29IYPYheAZgDFOggT8_Pwx938b5O",\n  "refunded": false,\n  "review": null,\n  "shipping": null,\n  "source": {\n    "id": "card_1QGE7lDBozxLjRB4RDp8l1fO",\n    "object": "card",\n    "address_city": null,\n    "address_country": null,\n    "address_line1": null,\n    "address_line1_check": null,\n    "address_line2": null,\n    "address_state": null,\n    "address_zip": null,\n    "address_zip_check": null,\n    "brand": "Visa",\n    "country": "US",\n    "customer": null,\n    "cvc_check": "pass",\n    "dynamic_last4": null,\n    "exp_month": 11,\n    "exp_year": 2025,\n    "fingerprint": "UJCnjLgVcdYQu6Df",\n    "funding": "debit",\n    "last4": "5556",\n    "metadata": {},\n    "name": null,\n    "tokenization_method": null,\n    "wallet": null\n  },\n  "source_transfer": null,\n  "statement_descriptor": null,\n  "statement_descriptor_suffix": null,\n  "status": "succeeded",\n  "transfer_data": null,\n  "transfer_group": null\n}' message='API response body'
+DEBUG:stripe:link=https://dashboard.stripe.com/test/logs/req_mYRbJyBE8lxSxO message='Dashboard link for request'
+INFO:app.views.seller_add_property:Charge created successfully.
+ERROR:app.views.seller_add_property:Failed to send email.
+INFO:werkzeug:127.0.0.1 - - [01/Nov/2024 06:14:22] "[31m[1mPOST /api/user/properties/add/checkout HTTP/1.1[0m" 400 -

@@ -35,31 +35,38 @@ def create_property(property_data):
         return False
 
 
+import os
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 def send_email(subject, message, recipient):
     try:
-        # Replace 'YOUR_SENDGRID_API_KEY' with your actual SendGrid API key
-        sg = sendgrid.SendGridAPIClient(current_app.config['SENDGRID_API_KEY'])
-
-        # Set up the sender and recipient
-        from_email = Email(current_app.config['MAIL_USERNAME'])  # Change to your verified sender
-        to_email = To(recipient)  # Change to your recipient
-
-        # Create a Mail object
-        mail = Mail(from_email, to_email)
-
-        # Set the email subject
-        mail.subject = subject
-
-        # Set the email content (plain text or HTML)
-        mail.content = sendgrid.helpers.mail.Content("text/plain", message)  # Changed 'contents' to 'content'
-
-        # Send an HTTP POST request to /mail/send
-        response = sg.send(mail)
+        # Load SMTP configuration
+        smtp_server = os.getenv("SMTP_SERVER")
+        smtp_port = os.getenv("SMTP_PORT")
+        smtp_user = os.getenv("SMTP_USER")
+        smtp_password = os.getenv("SMTP_PASSWORD")
         
-        # Return status code and headers
-        return response.status_code, response.headers
+        # Set up the email content
+        msg = MIMEMultipart()
+        msg['From'] = smtp_user
+        msg['To'] = recipient
+        msg['Subject'] = subject
+        msg.attach(MIMEText(message, 'plain'))
+        
+        # Connect to the SMTP server
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()  # Initiate TLS for security
+            server.login(smtp_user, smtp_password)
+            server.sendmail(smtp_user, recipient, msg.as_string())
+        
+        # Return a success response
+        return 200, {"message": "Email sent successfully"}
+    
     except Exception as e:
-        return 400 , {"error": str(e)}
+        logger.error(f"Email sending failed: {e}")  # Log the error
+        return 400, {"error": str(e)}
+
 
 
 def get_client_ip():
